@@ -241,8 +241,12 @@ class Player {
         else {
             this.handleMovement(dt);
         }
+        this.checkWallRunning(dt);
+        if (this.isWallRunning) {
+            this.handleWallRunning(dt);
+        }
         this.handleActions(dt);
-        if (!this.isGrounded) {
+        if (!this.isGrounded && !this.isWallRunning) {
             this.velocity.y -= this.gravity * dt;
             this.velocity.y = Math.max(this.velocity.y, -50);
         }
@@ -347,10 +351,11 @@ class Player {
         if (this.input.jump) {
             this.jumpBufferTimer = this.jumpBufferTime;
         }
-        const canJump = this.isGrounded || this.coyoteTimer > 0;
+        const canJump = this.isGrounded || this.coyoteTimer > 0 || this.isWallRunning;
         const wantsJump = this.jumpBufferTimer > 0;
         if (wantsJump && canJump && !this.isDashing) {
             const wasSliding = this.isSliding;
+            const wasWallRunning = this.isWallRunning;
             const slideMomentumAtJump = this.slideMomentum;
             if (wasSliding) {
                 this.isSliding = false;
@@ -377,6 +382,17 @@ class Player {
             this.coyoteTimer = 0;
             this.jumpBufferTimer = 0;
             this.momentumBank *= 0.5;
+            if (wasWallRunning) {
+                this.isWallRunning = false;
+                this.wallRunTimer = 0;
+                if (this.speedLinesElement) {
+                    this.speedLinesElement.classList.remove('active');
+                }
+                this.velocity.x += this.wallNormal.x * 15;
+                this.velocity.z += this.wallNormal.z * 15;
+                this.cameraTilt = 0;
+                this.targetCameraTilt = 0;
+            }
             if (this.isMoving && !wasSliding) {
                 const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
                 const boostMult = 1.15 + momentumBonus * 0.2;
@@ -586,8 +602,116 @@ class Player {
         }
         return false;
     }
+    checkWallRunning(dt) {
+        if (this.isGrounded || this.isDashing) {
+            this.isWallRunning = false;
+            this.wallRunTimer = 0;
+            return;
+        }
+        const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+        if (horizSpeed < 8) {
+            this.isWallRunning = false;
+            this.wallRunTimer = 0;
+            return;
+        }
+        const checkDist = this.radius + 0.3;
+        const bounds = this.arena.getBounds();
+        const halfSize = this.arena.size / 2;
+        let wallDetected = false;
+        let normal = new THREE.Vector3();
+        if (this.position.x <= -halfSize + checkDist) {
+            wallDetected = true;
+            normal.set(1, 0, 0);
+        } else if (this.position.x >= halfSize - checkDist) {
+            wallDetected = true;
+            normal.set(-1, 0, 0);
+        } else if (this.position.z <= -halfSize + checkDist) {
+            wallDetected = true;
+            normal.set(0, 0, 1);
+        } else if (this.position.z >= halfSize - checkDist) {
+            wallDetected = true;
+            normal.set(0, 0, -1);
+        }
+        if (!wallDetected) {
+            for (const obstacle of this.arena.obstacles) {
+                const halfObstacle = obstacle.size.clone().multiplyScalar(0.5);
+                const minX = obstacle.position.x - halfObstacle.x - checkDist;
+                const maxX = obstacle.position.x + halfObstacle.x + checkDist;
+                const minY = obstacle.position.y - halfObstacle.y;
+                const maxY = obstacle.position.y + halfObstacle.y;
+                const minZ = obstacle.position.z - halfObstacle.z - checkDist;
+                const maxZ = obstacle.position.z + halfObstacle.z + checkDist;
+                if (this.position.y > minY && this.position.y < maxY + this.height) {
+                    if (Math.abs(this.position.x - minX) < 0.5 && 
+                        this.position.z > obstacle.position.z - halfObstacle.z && 
+                        this.position.z < obstacle.position.z + halfObstacle.z) {
+                        wallDetected = true;
+                        normal.set(1, 0, 0);
+                        break;
+                    } else if (Math.abs(this.position.x - maxX) < 0.5 && 
+                               this.position.z > obstacle.position.z - halfObstacle.z && 
+                               this.position.z < obstacle.position.z + halfObstacle.z) {
+                        wallDetected = true;
+                        normal.set(-1, 0, 0);
+                        break;
+                    } else if (Math.abs(this.position.z - minZ) < 0.5 && 
+                               this.position.x > obstacle.position.x - halfObstacle.x && 
+                               this.position.x < obstacle.position.x + halfObstacle.x) {
+                        wallDetected = true;
+                        normal.set(0, 0, 1);
+                        break;
+                    } else if (Math.abs(this.position.z - maxZ) < 0.5 && 
+                               this.position.x > obstacle.position.x - halfObstacle.x && 
+                               this.position.x < obstacle.position.x + halfObstacle.x) {
+                        wallDetected = true;
+                        normal.set(0, 0, -1);
+                        break;
+                    }
+                }
+            }
+        }
+        if (wallDetected && this.velocity.y < 5) {
+            if (!this.isWallRunning) {
+                this.isWallRunning = true;
+                this.wallRunTimer = 0;
+                this.wallNormal.copy(normal);
+                if (this.speedLinesElement) {
+                    this.speedLinesElement.classList.add('active');
+                }
+                this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + 20);
+            }
+        } else {
+            if (this.isWallRunning) {
+                this.isWallRunning = false;
+                if (this.speedLinesElement) {
+                    this.speedLinesElement.classList.remove('active');
+                }
+            }
+            this.wallRunTimer = 0;
+        }
+    }
+    handleWallRunning(dt) {
+        this.wallRunTimer += dt;
+        if (this.wallRunTimer >= this.wallRunMaxTime) {
+            this.isWallRunning = false;
+            if (this.speedLinesElement) {
+                this.speedLinesElement.classList.remove('active');
+            }
+            return;
+        }
+        this.velocity.y = Math.max(this.velocity.y, -2);
+        const wallDir = new THREE.Vector3(-this.wallNormal.z, 0, this.wallNormal.x);
+        const currentDir = new THREE.Vector3(this.velocity.x, 0, this.velocity.z).normalize();
+        const dot = currentDir.dot(wallDir);
+        const runDir = dot > 0 ? wallDir : wallDir.clone().negate();
+        this.velocity.x = runDir.x * this.wallRunSpeed;
+        this.velocity.z = runDir.z * this.wallRunSpeed;
+        const tilt = dot > 0 ? 0.3 : -0.3;
+        this.targetCameraTilt = tilt;
+        this.cameraTilt += (this.targetCameraTilt - this.cameraTilt) * 0.15;
+    }
     updateCamera() {
-        if (this.isMoving && this.isGrounded && !this.isDashing && !this.isSliding) {
+        if (this.isMoving && this.isGrounded && !this.isDashing && !this.isSliding && !this.isWallRunning) {
             this.bobTime += 0.15;
             this.bobAmount = Math.sin(this.bobTime) * 0.05;
         } else {
@@ -608,8 +732,11 @@ class Player {
             this.position.z
         );
         this.camera.rotation.copy(this.rotation);
+        if (!this.isWallRunning) {
+            this.cameraTilt *= 0.9;
+        }
         this.camera.rotation.z = this.cameraTilt;
-        if (this.isDashing || this.isSliding) {
+        if (this.isDashing || this.isSliding || this.isWallRunning) {
             const moveTilt = (this.velocity.x * Math.cos(this.rotation.y) - this.velocity.z * Math.sin(this.rotation.y)) * 0.002;
             this.camera.rotation.z += moveTilt;
         }
