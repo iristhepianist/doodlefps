@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOODLE FPS</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="weapon-sprite-container">
+            <img id="weapon-sprite" src="" alt="" />
+        </div>
+        <div id="hud">
+            <div id="health-container">
+                <span id="health-label">HEALTH</span>
+                <span id="health-value">100</span>
+            </div>
+            <div id="weapon-container">
+                <span id="weapon-name">SKETCHER</span>
+                <span id="ammo-value">∞</span>
+                <svg id="special-squiggle" width="80" height="12" viewBox="0 0 80 12">
+                    <path id="special-path" d="" stroke="#ff6600" stroke-width="2" fill="none" stroke-linecap="round"/>
+                </svg>
+                <div id="sticky-container" style="display: none;">
+                    <span id="sticky-label">STICKY</span>
+                    <svg id="sticky-squiggle" width="80" height="12" viewBox="0 0 80 12">
+                        <path id="sticky-path" d="" stroke="#cc3300" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+            </div>
+            <div id="score-container">
+                <span id="score-label">SCORE</span>
+                <span id="score-value">0</span>
+            </div>
+            <div id="wave-container">
+                <span id="wave-label">WAVE</span>
+                <span id="wave-value">1</span>
+            </div>
+            <div id="enemies-container">
+                <span id="enemies-label">ENEMIES</span>
+                <span id="enemies-value">8</span>
+            </div>
+            <div id="flavor-text"></div>
+            <!-- Momentum and Smudge indicators -->
+            <div id="momentum-container">
+                <span id="momentum-label">MOMENTUM</span>
+                <svg id="momentum-squiggle" width="110" height="20" viewBox="0 0 110 20">
+                    <path id="momentum-path" d="" stroke="#3366cc" stroke-width="3" fill="none" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div id="smudge-container">
+                <span id="smudge-label">SMUDGE</span>
+                <svg id="smudge-squiggle" width="110" height="20" viewBox="0 0 110 20">
+                    <path id="smudge-path" d="" stroke="#884422" stroke-width="3" fill="none" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <canvas id="minimap"></canvas>
+        </div>
+        <div id="crosshair">+</div>
+        <div id="hit-marker">✕</div>
+        <div id="impact-marks"></div>
+        <div id="weapon-debris"></div>
+        <div id="damage-overlay"></div>
+        <div id="speed-lines"></div>
+        <div id="dash-indicator">
+            <svg id="dash-squiggle" width="110" height="14" viewBox="0 0 110 14">
+                <path id="dash-path" d="" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </svg>
+        </div>
+    </div>
+    <div id="start-screen">
+        <audio id="menu-music" loop>
+            <source src="Who Likes to Party.mp3" type="audio/mpeg">
+        </audio>
+        <h1>DOODLE FPS</h1>
+        <p>game by iristhepianist</p>
+        <div id="mode-buttons">
+            <button id="start-button">SURVIVAL</button>
+            <button id="sandbox-button">SANDBOX</button>
+        </div>
+        <button id="info-button">HOW TO PLAY</button>
+        <div id="controls-info">
+            <p>WASD - Move | SPACE - Jump | SHIFT - Dash | C - Slide</p>
+            <p>MOUSE - Aim | LEFT CLICK - Shoot | RIGHT CLICK - Special | 1/2/3 - Weapons | R - Reload</p>
+        </div>
+    </div>
+    
+    <!-- Info Deck Panel -->
+    <div id="info-deck" class="hidden">
+        <div id="info-content">
+            <h2>HOW TO PLAY</h2>
+            <div class="info-section">
+                <h3>⚔️ COMBAT</h3>
+                <p><strong>SKETCHER</strong> - Precise pistol. Headshots deal 2.5x damage. Infinite ammo.</p>
+                <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Charge ricochet shot (3s) - bounces between 5 enemies/walls</p>
+                <p><strong>ERASER</strong> - Shotgun. Devastating close-range. Massive recoil + force wave.</p>
+                <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Explosive pellet - huge splash damage and knockback</p>
+                <p style="margin-left: 20px; font-size: 12px;">Q KEY: Deploy sticky bomb (5s fuse) - shoot it for early detonation + bonus damage!</p>
+                <p><strong>SCRIBBLER</strong> - SMG. Rapid fire. Slows enemies on hit.</p>
+                <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Overcharge mode - 3x fire rate for 4s, then 6s cooldown</p>
+            </div>
+            <div class="info-section">
+                <h3>🏃 MOVEMENT</h3>
+                <p><strong>DASH (SHIFT)</strong> - Quick burst. Banking momentum boosts power!</p>
+                <p><strong>SLIDE (C)</strong> - Fast low slide. Releases banked momentum.</p>
+                <p><strong>AIR DODGE</strong> - Double-tap jump mid-air. 2 charges.</p>
+                <p><strong>SHARP TURNS</strong> - Quick direction changes build momentum.</p>
+            </div>
+            <div class="info-section">
+                <h3>⚡ MOMENTUM & SMUDGE</h3>
+                <p><strong>MOMENTUM</strong> - Builds from speed. Release on jumps/dashes for boosts!</p>
+                <p><strong>SMUDGE</strong> - Risk vs reward. High smudge = +50% damage but less accuracy!</p>
+                <p><strong>DASH CANCEL</strong> - Shoot during dash window for +25% damage.</p>
+            </div>
+            <div class="info-section">
+                <h3>👾 ENEMIES</h3>
+                <p><strong>Scribble (Cube)</strong> - Fast chaser. Direct pursuit.</p>
+                <p><strong>Scratch (Sphere)</strong> - Tiny swarmer. Comes in packs. Zig-zag movement.</p>
+                <p><strong>Blot (Eye)</strong> - Ranged. Maintains distance. Watch for red targeting ring.</p>
+                <p><strong>Inkblob (Tank)</strong> - Heavy armor. Slow but tough. Knockback resistant.</p>
+                <p><strong>Smudge (Bruiser)</strong> - Massive. Devastating damage. Shockwave attack.</p>
+            </div>
+            <div class="info-section">
+                <h3>💡 TIPS</h3>
+                <p>• Bank momentum by moving fast, release on jumps for 40% boost!</p>
+                <p>• Sharp turns build momentum - zig-zag for power!</p>
+                <p>• Enter smudge state (70%) for damage, exit for accuracy.</p>
+                <p>• Dash cancel into shots for bonus damage.</p>
+                <p>• ERASER recoil = traversal tool. Jump-shoot to fly!</p>
+                <p>• Air dodges save you mid-air - don't waste them!</p>
+            </div>
+            <button id="info-close-button">GOT IT</button>
+        </div>
+    </div>
+    
+    <!-- Pause Menu -->
+    <div id="pause-screen" class="hidden">
+        <h1>PAUSED</h1>
+        <p>Press ESC to resume</p>
+        <div class="pause-buttons">
+            <button id="resume-button">RESUME</button>
+            <button id="quit-button">QUIT TO MENU</button>
+        </div>
+    </div>
+    <div id="death-screen" class="hidden">
+        <h1>SKETCHED OUT</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <p>Wave Reached: <span id="final-wave">1</span></p>
+        <button id="restart-button">TRY AGAIN</button>
+    </div>
+    
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    
+    <!-- Game scripts in dependency order (NO modules - works with file://) -->
+    <script src="js/renderer.js"></script>
+    <script src="js/arena.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/weapons.js"></script>
+    <script src="js/enemies.js"></script>
+    <script src="js/healthpacks.js"></script>
+    <script src="js/gameState.js"></script>
+    <script src="js/minimap.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
