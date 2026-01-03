@@ -276,8 +276,13 @@ class WeaponSystem {
     }
     stopSpecialFiring() {
         const weapon = this.currentWeapon;
-        if (weapon.specialAbility === 'beam' && this.specialChargeTimer >= weapon.specialChargeTime) {
-            this.fireRicochetBeam();
+        if (weapon.specialAbility === 'beam') {
+            console.log('Beam charge:', this.specialChargeTimer, '/', weapon.specialChargeTime);
+            if (this.specialChargeTimer >= weapon.specialChargeTime) {
+                console.log('Firing beam!');
+                this.fireRicochetBeam();
+                this.specialChargeTimer = 0;
+            }
         }
         this.isSpecialFiring = false;
     }
@@ -291,7 +296,7 @@ class WeaponSystem {
         const throwSpeed = 25;
         const velocity = direction.clone().multiplyScalar(throwSpeed);
         velocity.y += 5;
-        const stickyGeom = new THREE.SphereGeometry(0.5, 10, 8);
+        const stickyGeom = new THREE.SphereGeometry(0.5, 16, 12);
         const stickyMat = new THREE.MeshBasicMaterial({ 
             color: 0xcc3300,
             transparent: true,
@@ -323,6 +328,10 @@ class WeaponSystem {
         const weapon = this.currentWeapon;
         if (!this.isReloading && weapon.ammo < weapon.maxAmmo && weapon.maxAmmo !== Infinity) {
             this.isReloading = true;
+            if (window.game && window.game.sounds && window.game.sounds.reload) {
+                window.game.sounds.reload.currentTime = 0;
+                window.game.sounds.reload.play().catch(() => {});
+            }
             let reloadSpeedMult = 1.0;
             if (this.player) {
                 const speed = this.player.getCurrentSpeed();
@@ -367,9 +376,10 @@ class WeaponSystem {
         if (this.isSpecialFiring && weapon.specialAbility === 'beam') {
             if (this.specialChargeTimer < weapon.specialChargeTime) {
                 this.specialChargeTimer += dt;
+                if (Math.floor(this.specialChargeTimer * 10) % 10 === 0) {
+                    console.log('Charging beam:', (this.specialChargeTimer / weapon.specialChargeTime * 100).toFixed(0) + '%');
+                }
             }
-        } else if (!this.isSpecialFiring) {
-            this.specialChargeTimer = 0;
         }
         if (this.isSpecialFiring && !this.isReloading) {
             if (weapon.specialAbility === 'explosive-pellet' && weapon.ammo > 0) {
@@ -424,6 +434,14 @@ class WeaponSystem {
                 result = this.fire(enemies);
                 this.fireTimer = 1 / currentFireRate;
                 this.screenShake = Math.min(0.12, this.screenShake + (weapon.screenShake || 0.02));
+                if (window.game && window.game.sounds) {
+                    let soundName = weapon.name.toLowerCase();
+                    if (soundName === 'eraser') soundName = 'shotgun';
+                    if (window.game.sounds[soundName]) {
+                        window.game.sounds[soundName].currentTime = 0;
+                        window.game.sounds[soundName].play().catch(() => {});
+                    }
+                }
                 if (weapon.ammo !== Infinity) {
                     weapon.ammo--;
                     if (weapon.ammo <= 0) {
@@ -664,9 +682,8 @@ class WeaponSystem {
         this.scene.add(wave);
     }
     createImpact(position, isEnemy, color = 0x1a1a1a) {
-        if (Math.random() > 0.5) return;
         const size = isEnemy ? 0.2 : 0.12;
-        const splatCount = isEnemy ? 2 : 1;
+        const splatCount = isEnemy ? 3 : 2;
         for (let i = 0; i < splatCount; i++) {
             const geometry = new THREE.CircleGeometry(size * (0.7 + Math.random() * 0.6), 8);
             const material = new THREE.MeshBasicMaterial({ 
@@ -687,15 +704,11 @@ class WeaponSystem {
             this.impactMarkers.push(impact);
             this.scene.add(impact);
         }
-        while (this.impactMarkers.length > 30) {
+        while (this.impactMarkers.length > 60) {
             const old = this.impactMarkers.shift();
-            if (old.tagName === 'DIV') {
-                old.remove();
-            } else {
-                this.scene.remove(old);
-                if (old.geometry) old.geometry.dispose();
-                if (old.material) old.material.dispose();
-            }
+            this.scene.remove(old);
+            old.geometry.dispose();
+            old.material.dispose();
         }
     }
     triggerMuzzleFlash() {
@@ -754,9 +767,6 @@ class WeaponSystem {
         if (!enemy || !enemy.mesh) return;
         const container = document.getElementById('impact-marks');
         if (!container) return;
-        if (this.impactMarkers.filter(m => m.tagName === 'DIV').length > 15) {
-            return;
-        }
         const mark = document.createElement('div');
         mark.className = 'impact-mark-3d';
         const words = ['POW!', 'BAM!', 'WHAM!', 'ZAP!'];
@@ -984,7 +994,7 @@ class WeaponSystem {
                 direction.multiplyScalar(weapon.specialRange)
             );
         }
-        const explosionGeom = new THREE.SphereGeometry(weapon.specialExplosionRadius, 10, 8);
+        const explosionGeom = new THREE.SphereGeometry(weapon.specialExplosionRadius, 16, 12);
         const explosionMat = new THREE.MeshBasicMaterial({ 
             color: 0xff6600, 
             transparent: true, 
@@ -1228,7 +1238,7 @@ class WeaponSystem {
             finalDamage *= 2.0;
             finalRadius *= 2.5;
         }
-        const explosionGeom = new THREE.SphereGeometry(0.1, 10, 8);
+        const explosionGeom = new THREE.SphereGeometry(0.1, 16, 12);
         const explosionMat = new THREE.MeshBasicMaterial({ 
             color: beamTriggered ? 0xffaa00 : 0xff4400, 
             transparent: true, 

@@ -32,9 +32,9 @@ class Player {
         this.airDodgeCooldown = 0;
         this.airDodgeCharges = 2;
         this.maxAirDodgeCharges = 2;
-        this.dashSpeed = 50;
-        this.dashDuration = 0.14;
-        this.dashCooldown = 0.6;
+        this.dashSpeed = 65;
+        this.dashDuration = 0.18;
+        this.dashCooldown = 0.4;
         this.dashTimer = 0;
         this.dashCooldownTimer = 0;
         this.isDashing = false;
@@ -67,6 +67,8 @@ class Player {
         this.wallRunTimer = 0;
         this.wallRunMaxTime = 2.0;
         this.wallRunSpeed = 20;
+        this.wallRunExitTimer = 0;
+        this.wallRunExitWindow = 1.0;
         this.input = {
             forward: false,
             backward: false,
@@ -86,7 +88,6 @@ class Player {
         this.jumpBufferTime = 0.12;
         this.jumpBufferTimer = 0;
         this.speedLinesElement = document.getElementById('speed-lines');
-        this.lastDamageSource = null;
     }
     reset() {
         this.position.set(0, 2, 0);
@@ -199,8 +200,8 @@ class Player {
                 if (this.speedLinesElement) {
                     this.speedLinesElement.classList.remove('active');
                 }
-                this.velocity.x = this.dashDirection.x * this.moveSpeed * 0.5;
-                this.velocity.z = this.dashDirection.z * this.moveSpeed * 0.5;
+                this.velocity.x = this.dashDirection.x * this.moveSpeed * 1.2;
+                this.velocity.z = this.dashDirection.z * this.moveSpeed * 1.2;
             } else {
                 this.velocity.x = this.dashDirection.x * this.dashSpeed;
                 this.velocity.z = this.dashDirection.z * this.dashSpeed;
@@ -213,6 +214,10 @@ class Player {
                 this.isSliding = false;
                 if (this.speedLinesElement) {
                     this.speedLinesElement.classList.remove('active');
+                }
+                if (window.game && window.game.sounds && window.game.sounds.sliding) {
+                    window.game.sounds.sliding.pause();
+                    window.game.sounds.sliding.currentTime = 0;
                 }
                 const exitSpeed = Math.max(this.slideMinSpeed, this.slideMomentum * 0.5);
                 this.velocity.x = this.slideDirection.x * exitSpeed;
@@ -250,6 +255,9 @@ class Player {
         if (!this.isGrounded && !this.isWallRunning) {
             this.velocity.y -= this.gravity * dt;
             this.velocity.y = Math.max(this.velocity.y, -50);
+        }
+        if (this.wallRunExitTimer > 0) {
+            this.wallRunExitTimer -= dt;
         }
         this.wasGrounded = this.isGrounded;
         this.moveWithCollision(dt);
@@ -364,6 +372,10 @@ class Player {
                 if (this.speedLinesElement) {
                     this.speedLinesElement.classList.remove('active');
                 }
+                if (window.game && window.game.sounds && window.game.sounds.sliding) {
+                    window.game.sounds.sliding.pause();
+                    window.game.sounds.sliding.currentTime = 0;
+                }
             }
             const momentumBonus = this.momentumBank / this.maxMomentumBank;
             let jumpPower = this.jumpForce * (1 + momentumBonus * 0.4);
@@ -374,11 +386,16 @@ class Player {
                 this.slideJumpSpeedBoost = 1.0 + momentumBonus * 0.6;
                 this.slideJumpBoostTimer = 2.5;
                 const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-                const boostMult = 1.4 + momentumBonus * 0.4;
+                const wallrunExtraBoost = (slideMomentumAtJump > this.slideSpeed) ? 1.3 : 1.0;
+                const boostMult = (1.4 + momentumBonus * 0.4) * wallrunExtraBoost;
                 this.velocity.x *= boostMult;
                 this.velocity.z *= boostMult;
             }
             this.velocity.y = jumpPower;
+            if (window.game && window.game.sounds && window.game.sounds.jump) {
+                window.game.sounds.jump.currentTime = 0;
+                window.game.sounds.jump.play().catch(() => {});
+            }
             this.isGrounded = false;
             this.coyoteTimer = 0;
             this.jumpBufferTimer = 0;
@@ -424,9 +441,15 @@ class Player {
         if (this.speedLinesElement) {
             this.speedLinesElement.classList.add('active');
         }
+        if (window.game && window.game.sounds && window.game.sounds.jump) {
+            const dashSound = window.game.sounds.jump.cloneNode();
+            dashSound.volume = 0.3;
+            dashSound.playbackRate = 0.8;
+            dashSound.play().catch(() => {});
+        }
         const momentumBonus = this.momentumBank / this.maxMomentumBank;
-        const dashPower = this.dashSpeed * (1 + momentumBonus * 0.25);
-        this.momentumBank *= 0.3;
+        const dashPower = this.dashSpeed * (1 + momentumBonus * 0.3);
+        this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + 30);
         const yaw = this.rotation.y;
         const forwardX = -Math.sin(yaw);
         const forwardZ = -Math.cos(yaw);
@@ -458,6 +481,9 @@ class Player {
         this.dashDirection.set(dashX / len, 0, dashZ / len);
         this.velocity.x = this.dashDirection.x * dashPower;
         this.velocity.z = this.dashDirection.z * dashPower;
+        if (!this.isGrounded) {
+            this.velocity.y = Math.max(this.velocity.y, 8);
+        }
         this.smudgeLevel = Math.min(this.maxSmudgeLevel, this.smudgeLevel + 15);
     }
     performAirDodge() {
@@ -493,6 +519,11 @@ class Player {
         if (this.speedLinesElement) {
             this.speedLinesElement.classList.add('active');
         }
+        if (window.game && window.game.sounds && window.game.sounds.sliding) {
+            window.game.sounds.sliding.currentTime = 0;
+            window.game.sounds.sliding.play().catch(() => {});
+        }
+        const wasRecentlyWallrunning = this.wallRunExitTimer > 0;
         const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
         if (horizSpeed > 1) {
             this.slideDirection.set(this.velocity.x / horizSpeed, 0, this.velocity.z / horizSpeed);
@@ -501,10 +532,14 @@ class Player {
             this.slideDirection.set(-Math.sin(yaw), 0, -Math.cos(yaw));
         }
         const momentumBonus = this.momentumBank / this.maxMomentumBank;
-        this.slideMomentum = this.slideSpeed + Math.min(horizSpeed * 0.6, 18) + momentumBonus * 12;
+        const wallrunBoost = wasRecentlyWallrunning ? 1.5 : 1.0;
+        this.slideMomentum = (this.slideSpeed + Math.min(horizSpeed * 0.6, 18) + momentumBonus * 12) * wallrunBoost;
         this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + horizSpeed * 0.8 + 15);
         this.velocity.x = this.slideDirection.x * this.slideMomentum;
         this.velocity.z = this.slideDirection.z * this.slideMomentum;
+        if (wasRecentlyWallrunning) {
+            this.wallRunExitTimer = 0;
+        }
         this.smudgeLevel = Math.min(this.maxSmudgeLevel, this.smudgeLevel + 8);
     }
     handleCollision(axis, oldPos) {
@@ -604,7 +639,6 @@ class Player {
         return false;
     }
     checkWallRunning(dt) {
-<<<<<<< HEAD
         if (this.isGrounded || this.isDashing || this.wallRunTimer >= this.wallRunMaxTime) {
             this.isWallRunning = false;
             this.wallRunTimer = 0;
@@ -620,17 +654,6 @@ class Player {
             if (this.speedLinesElement && !this.isDashing && !this.isSliding) {
                 this.speedLinesElement.classList.remove('active');
             }
-=======
-        if (this.isGrounded || this.isDashing) {
-            this.isWallRunning = false;
-            this.wallRunTimer = 0;
-            return;
-        }
-        const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-        if (horizSpeed < 8) {
-            this.isWallRunning = false;
-            this.wallRunTimer = 0;
->>>>>>> e665c2af35166198882990bdbe1f122649f6957b
             return;
         }
         const checkDist = this.radius + 0.3;
@@ -698,20 +721,14 @@ class Player {
                     this.speedLinesElement.classList.add('active');
                 }
                 this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + 20);
-<<<<<<< HEAD
             } else {
                 this.wallNormal.copy(normal);
-=======
->>>>>>> e665c2af35166198882990bdbe1f122649f6957b
             }
         } else {
             if (this.isWallRunning) {
                 this.isWallRunning = false;
-<<<<<<< HEAD
+                this.wallRunExitTimer = this.wallRunExitWindow;
                 if (this.speedLinesElement && !this.isDashing && !this.isSliding) {
-=======
-                if (this.speedLinesElement) {
->>>>>>> e665c2af35166198882990bdbe1f122649f6957b
                     this.speedLinesElement.classList.remove('active');
                 }
             }

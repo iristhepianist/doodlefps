@@ -16,7 +16,6 @@ class Game {
         this.isRunning = false;
         this.isPaused = false;
         this.isSandboxMode = false;
-        this.minimapUpdateCounter = 0;
         this.setupEventListeners();
         this.setupUI();
     }
@@ -144,6 +143,19 @@ class Game {
             this.menuMusic.play().catch(() => {
             });
         }
+        this.sounds = {
+            jump: document.getElementById('jump-sound'),
+            reload: document.getElementById('reload-sound'),
+            healthpack: document.getElementById('healthpack-sound'),
+            sketcher: document.getElementById('sketcher-sound'),
+            scribbler: document.getElementById('scribbler-sound'),
+            shotgun: document.getElementById('shotgun-sound'),
+            sliding: document.getElementById('sliding-sound')
+        };
+        Object.values(this.sounds).forEach(sound => {
+            if (sound) sound.volume = 0.5;
+        });
+        window.game = this;
         this.lastWeaponIndex = 0;
         this.lastWave = 1;
         this.lastScore = 0;
@@ -172,8 +184,7 @@ class Game {
     start() {
         document.getElementById('start-screen').classList.add('hidden');
         if (this.menuMusic) {
-            this.menuMusic.pause();
-            this.menuMusic.currentTime = 0;
+            this.menuMusic.volume = 0.15;
         }
         this.isRunning = true;
         this.isPaused = false;
@@ -209,10 +220,11 @@ class Game {
         document.getElementById('death-screen').classList.add('hidden');
         document.getElementById('start-screen').classList.remove('hidden');
         if (this.menuMusic) {
+            this.menuMusic.volume = 0.4;
             this.menuMusic.currentTime = 0;
             this.menuMusic.play().catch(() => {});
         }
-        this.gameState.reset();
+        this.gameState.reset()
         this.player.reset();
         this.enemyManager.reset();
         this.weaponSystem.reset();
@@ -252,10 +264,9 @@ class Game {
             this.showFlavorText(shotResult.killMethod);
         }
         if (!this.isSandboxMode) {
-            const damageResult = this.enemyManager.checkPlayerDamage(this.player.position, this.player.radius);
-            if (damageResult.damage > 0) {
-                this.player.takeDamage(damageResult.damage);
-                this.player.lastDamageSource = damageResult.source;
+            const damage = this.enemyManager.checkPlayerDamage(this.player.position, this.player.radius);
+            if (damage > 0) {
+                this.player.takeDamage(damage);
                 this.showDamageEffect();
             }
         }
@@ -282,14 +293,10 @@ class Game {
         this.updateUI();
         this.enemyManager.update(dt);
         this.weaponSystem.update(dt, this.enemyManager.enemies);
-        this.minimapUpdateCounter++;
-        if (this.minimapUpdateCounter >= 3) {
-            this.minimapUpdateCounter = 0;
-            const minimapEnemies = this.enemyManager.getEnemiesForMinimap 
-                ? this.enemyManager.getEnemiesForMinimap() 
-                : this.enemyManager.enemies;
-            this.minimap.update(this.player.position, this.player.rotation.y, minimapEnemies, dt * 3);
-        }
+        const minimapEnemies = this.enemyManager.getEnemiesForMinimap 
+            ? this.enemyManager.getEnemiesForMinimap() 
+            : this.enemyManager.enemies;
+        this.minimap.update(this.player.position, this.player.rotation.y, minimapEnemies, dt);
         const screenShake = this.weaponSystem.getScreenShake();
         this.renderer.applyJitter(this.player.isMoving, screenShake);
         if (this.player.getTrailData && this.renderer.updateTrails) {
@@ -357,7 +364,7 @@ class Game {
             const ws = this.weaponSystem;
             specialSquiggle.classList.remove('ready', 'cooldown');
             let chargePercent = 0;
-            if (weapon.specialAbility === 'ricochet') {
+            if (weapon.specialAbility === 'beam') {
                 chargePercent = (ws.specialChargeTimer / weapon.specialChargeTime) * 100;
                 if (chargePercent >= 100) {
                     specialSquiggle.classList.add('ready');
@@ -486,19 +493,7 @@ class Game {
         document.exitPointerLock();
         document.getElementById('final-score').textContent = this.gameState.score;
         document.getElementById('final-wave').textContent = this.gameState.wave;
-        const deathTip = this.getDeathTip(this.player.lastDamageSource);
-        document.getElementById('death-tip').textContent = deathTip;
         document.getElementById('death-screen').classList.remove('hidden');
-    }
-    getDeathTip(source) {
-        const tips = {
-            chaser: "TIP: Scribbles chase directly - use dashes and slides to outmaneuver them!",
-            swarmer: "TIP: Scratchers swarm in packs - use the ERASER's shotgun spread to clear groups!",
-            ranged: "TIP: Blots shoot from range - stay mobile and use cover to avoid their shots!",
-            tank: "TIP: Inkblobs are tough tanks - aim for headshots and use high-damage weapons!",
-            bruiser: "TIP: Smudges are dangerous bruisers - keep your distance and watch for shockwaves!"
-        };
-        return tips[source] || "TIP: Stay mobile and use your momentum to survive longer!";
     }
 }
 window.addEventListener('DOMContentLoaded', () => {

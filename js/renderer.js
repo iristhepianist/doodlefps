@@ -12,11 +12,12 @@ class Renderer {
         this.camera.position.set(0, 2, 0);
         this.webglRenderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
-            antialias: true, 
-            alpha: false
+            antialias: false, 
+            alpha: false,
+            powerPreference: 'high-performance'
         });
         this.webglRenderer.setSize(window.innerWidth, window.innerHeight);
-        this.webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         this.webglRenderer.shadowMap.enabled = false;
         this.jitterAmount = 0;
         this.basePosition = new THREE.Vector3();

@@ -151,16 +151,12 @@ class EnemyManager {
     checkPlayerDamage(playerPos, playerRadius) {
         let totalDamage = 0;
         let shockwaveHit = false;
-        let damageSource = null;
         for (const enemy of this.enemies) {
             if (enemy.isAlive && enemy.canAttack) {
                 const dist = enemy.position.distanceTo(playerPos);
                 if (dist < enemy.attackRange + playerRadius) {
                     const dmg = enemy.attack();
                     totalDamage += dmg;
-                    if (!damageSource) {
-                        damageSource = enemy.type;
-                    }
                     if (enemy.type === 'bruiser' && !shockwaveHit) {
                         shockwaveHit = true;
                         enemy.triggerShockwave();
@@ -168,7 +164,7 @@ class EnemyManager {
                 }
             }
         }
-        return { damage: totalDamage, source: damageSource };
+        return totalDamage;
     }
     getEnemiesForMinimap() {
         return this.enemies.filter(e => e.isAlive).map(e => ({
@@ -266,6 +262,11 @@ class Enemy {
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
+        const outlineGeom = new THREE.BoxGeometry(width * 1.08, height * 1.08, depth * 1.08);
+        const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
+        const outline = new THREE.Mesh(outlineGeom, outlineMat);
+        outline.position.copy(body.position);
+        this.mesh.add(outline);
         const eyeWidth = 0.15;
         const eyeHeight = 0.25;
         const eyeDepth = 0.05;
@@ -316,11 +317,16 @@ class Enemy {
     createSwarmerMesh(def) {
         const bodyColor = 0x9966ff; 
         const radius = def.size.x * 0.5;
-        const bodyGeom = new THREE.SphereGeometry(radius, 10, 8);
+        const bodyGeom = new THREE.SphereGeometry(radius, 16, 12);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
+        const outlineGeom = new THREE.SphereGeometry(radius * 1.06, 16, 12);
+        const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
+        const outline = new THREE.Mesh(outlineGeom, outlineMat);
+        outline.position.copy(body.position);
+        this.mesh.add(outline);
         this.leftEye = this.createEyeball(-radius * 0.4, def.size.y * 0.65, radius * 0.8, 0.15, 0.08, 0xffffff);
         this.rightEye = this.createEyeball(radius * 0.4, def.size.y * 0.65, radius * 0.8, 0.15, 0.08, 0xffffff);
         this.mesh.add(this.leftEye);
@@ -343,7 +349,7 @@ class Enemy {
     createRangedMesh(def) {
         const bodyColor = 0x00ccff; 
         const radius = def.size.x * 0.6;
-        const bodyGeom = new THREE.SphereGeometry(radius, 12, 10);
+        const bodyGeom = new THREE.SphereGeometry(radius, 20, 16);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
@@ -675,6 +681,31 @@ class Enemy {
         if (!this.canAttack || !this.isAlive) return 0;
         this.canAttack = false;
         this.attackTimer = this.attackCooldown;
+        if (this.type === 'ranged') {
+            const projGeom = new THREE.SphereGeometry(0.3, 8, 8);
+            const projMat = new THREE.MeshBasicMaterial({ 
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.9
+            });
+            const proj = new THREE.Mesh(projGeom, projMat);
+            proj.position.copy(this.position);
+            proj.position.y += this.size.y / 2;
+            this.scene.add(proj);
+            const glowGeom = new THREE.SphereGeometry(0.5, 8, 8);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: 0xff4444,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeom, glowMat);
+            glow.position.copy(proj.position);
+            this.scene.add(glow);
+            setTimeout(() => {
+                this.scene.remove(proj);
+                this.scene.remove(glow);
+            }, 500);
+        }
         return this.damage;
     }
     die() {

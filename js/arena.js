@@ -2,7 +2,7 @@ class Arena {
     constructor(scene) {
         this.scene = scene;
         this.obstacles = [];
-        this.size = 100;
+        this.size = 140;
         this.wallHeight = 20;
         this.createArena();
     }
@@ -82,17 +82,26 @@ class Arena {
     }
     addObstacles() {
         this.addBox(0, 2.5, 0, 5, 5, 5);
-        this.addBox(-35, 2, -35, 5, 4, 5);
-        this.addBox(35, 2, -35, 5, 4, 5);
-        this.addBox(-35, 2, 35, 5, 4, 5);
-        this.addBox(35, 2, 35, 5, 4, 5);
-        this.addBox(-22, 1.5, 0, 3, 3, 10);
-        this.addBox(22, 1.5, 0, 3, 3, 10);
-        this.addBox(0, 1.5, -22, 10, 3, 3);
-        this.addBox(0, 1.5, 22, 10, 3, 3);
-        this.addBox(-12, 0.4, -12, 3, 0.8, 3);
-        this.addBox(12, 0.4, -12, 3, 0.8, 3);
-        this.addBox(-12, 0.4, 12, 3, 0.8, 3);
+        this.addBox(-50, 2.5, -50, 6, 5, 6);
+        this.addBox(50, 2.5, -50, 6, 5, 6);
+        this.addBox(-50, 2.5, 50, 6, 5, 6);
+        this.addBox(50, 2.5, 50, 6, 5, 6);
+        this.addBox(-30, 2, 0, 4, 4, 12);
+        this.addBox(30, 2, 0, 4, 4, 12);
+        this.addBox(0, 2, -30, 12, 4, 4);
+        this.addBox(0, 2, 30, 12, 4, 4);
+        this.addBox(-15, 0.5, -15, 4, 1, 4);
+        this.addBox(15, 0.5, -15, 4, 1, 4);
+        this.addBox(-15, 0.5, 15, 4, 1, 4);
+        this.addBox(15, 0.5, 15, 4, 1, 4);
+        this.addBox(-40, 1.5, -20, 3, 3, 8);
+        this.addBox(40, 1.5, -20, 3, 3, 8);
+        this.addBox(-40, 1.5, 20, 3, 3, 8);
+        this.addBox(40, 1.5, 20, 3, 3, 8);
+        this.addBox(-20, 1.5, -40, 8, 3, 3);
+        this.addBox(20, 1.5, -40, 8, 3, 3);
+        this.addBox(-20, 1.5, 40, 8, 3, 3);
+        this.addBox(20, 1.5, 40, 8, 3, 3);
         this.addBox(12, 0.4, 12, 3, 0.8, 3);
     }
     addBox(x, y, z, width, height, depth) {

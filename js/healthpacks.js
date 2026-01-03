@@ -87,6 +87,10 @@ class HealthPackManager {
                 pack.collected = true;
                 this.scene.remove(pack.mesh);
                 this.healthPacks.splice(i, 1);
+                if (window.game && window.game.sounds && window.game.sounds.healthpack) {
+                    window.game.sounds.healthpack.currentTime = 0;
+                    window.game.sounds.healthpack.play().catch(() => {});
+                }
                 return { collected: true, healAmount: 50 };
             }
         }

@@ -72,8 +72,15 @@
     </div>
     <div id="start-screen">
         <audio id="menu-music" loop>
-            <source src="Who Likes to Party.mp3" type="audio/mpeg">
+            <source src="music/Who Likes to Party.mp3" type="audio/mpeg">
         </audio>
+        <audio id="jump-sound"><source src="music/jump.mp3" type="audio/mpeg"></audio>
+        <audio id="reload-sound"><source src="music/reload.mp3" type="audio/mpeg"></audio>
+        <audio id="healthpack-sound"><source src="music/healthpack.mp3" type="audio/mpeg"></audio>
+        <audio id="sketcher-sound"><source src="music/sketcher.mp3" type="audio/mpeg"></audio>
+        <audio id="scribbler-sound"><source src="music/scribbler.mp3" type="audio/mpeg"></audio>
+        <audio id="shotgun-sound"><source src="music/shotgun.mp3" type="audio/mpeg"></audio>
+        <audio id="sliding-sound"><source src="music/sliding.mp3" type="audio/mpeg"></audio>
         <h1>DOODLE FPS</h1>
         <p>game by iristhepianist</p>
         <div id="mode-buttons">
@@ -92,9 +99,9 @@
         <div id="info-content">
             <h2>HOW TO PLAY</h2>
             <div class="info-section">
-                <h3> COMBAT</h3>
+                <h3>⚔️ COMBAT</h3>
                 <p><strong>SKETCHER</strong> - Precise pistol. Headshots deal 2.5x damage. Infinite ammo.</p>
-                <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Charge ricochet shot (3s) - bounces between 5 enemies/walls (WIP!)  </p>
+                <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Charge ricochet shot (3s) - bounces between 5 enemies/walls</p>
                 <p><strong>ERASER</strong> - Shotgun. Devastating close-range. Massive recoil + force wave.</p>
                 <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Explosive pellet - huge splash damage and knockback</p>
                 <p style="margin-left: 20px; font-size: 12px;">Q KEY: Deploy sticky bomb (5s fuse) - shoot it for early detonation + bonus damage!</p>
@@ -148,7 +155,6 @@
         <h1>SKETCHED OUT</h1>
         <p>Final Score: <span id="final-score">0</span></p>
         <p>Wave Reached: <span id="final-wave">1</span></p>
-        <p id="death-tip" style="font-size: 14px; margin-top: 20px; color: #666; font-style: italic;"></p>
         <button id="restart-button">TRY AGAIN</button>
     </div>
     
