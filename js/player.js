@@ -604,6 +604,7 @@ class Player {
         return false;
     }
     checkWallRunning(dt) {
+<<<<<<< HEAD
         if (this.isGrounded || this.isDashing || this.wallRunTimer >= this.wallRunMaxTime) {
             this.isWallRunning = false;
             this.wallRunTimer = 0;
@@ -619,6 +620,17 @@ class Player {
             if (this.speedLinesElement && !this.isDashing && !this.isSliding) {
                 this.speedLinesElement.classList.remove('active');
             }
+=======
+        if (this.isGrounded || this.isDashing) {
+            this.isWallRunning = false;
+            this.wallRunTimer = 0;
+            return;
+        }
+        const horizSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+        if (horizSpeed < 8) {
+            this.isWallRunning = false;
+            this.wallRunTimer = 0;
+>>>>>>> e665c2af35166198882990bdbe1f122649f6957b
             return;
         }
         const checkDist = this.radius + 0.3;
@@ -686,13 +698,20 @@ class Player {
                     this.speedLinesElement.classList.add('active');
                 }
                 this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + 20);
+<<<<<<< HEAD
             } else {
                 this.wallNormal.copy(normal);
+=======
+>>>>>>> e665c2af35166198882990bdbe1f122649f6957b
             }
         } else {
             if (this.isWallRunning) {
                 this.isWallRunning = false;
+<<<<<<< HEAD
                 if (this.speedLinesElement && !this.isDashing && !this.isSliding) {
+=======
+                if (this.speedLinesElement) {
+>>>>>>> e665c2af35166198882990bdbe1f122649f6957b
                     this.speedLinesElement.classList.remove('active');
                 }
             }
