@@ -28,7 +28,11 @@ class WeaponSystem {
                 specialDamage: 200,
                 specialRange: 500,
                 beamWidth: 0.8,
-                ricochetCount: 3
+                ricochetCount: 3,
+                qAbility: 'mark',
+                qCooldown: 8.0,
+                markDuration: 6.0,
+                markDamageBonus: 1.5
             },
             {
                 name: 'ERASER',
@@ -87,7 +91,12 @@ class WeaponSystem {
                 specialAbility: 'overcharge',
                 specialDuration: 4.0,
                 specialCooldown: 6.0,
-                specialFireRateMultiplier: 3.0
+                specialFireRateMultiplier: 3.0,
+                qAbility: 'turret',
+                qCooldown: 15.0,
+                turretDuration: 10.0,
+                turretDamage: 12,
+                turretFireRate: 5
             }
         ];
         this.currentWeaponIndex = 0;
@@ -324,6 +333,87 @@ class WeaponSystem {
         this.stickyChargeTimer = 0;
         this.screenShake = 0.08;
     }
+    useQAbility() {
+        const weapon = this.currentWeapon;
+        if (this.qAbilityCooldown > 0) return;
+        if (weapon.qAbility === 'mark') {
+            this.markTarget();
+        } else if (weapon.name === 'ERASER') {
+            this.deployStickyExplosive();
+        } else if (weapon.qAbility === 'turret') {
+            this.deployTurret();
+        }
+    }
+    markTarget() {
+        const weapon = this.currentWeapon;
+        if (this.qAbilityCooldown > 0) return;
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(this.camera.quaternion);
+        this.raycaster.set(this.camera.position, direction);
+        this.raycaster.far = 300;
+        const enemies = this.scene.children.filter(obj => obj.userData.isEnemy);
+        const intersects = this.raycaster.intersectObjects(enemies, true);
+        if (intersects.length > 0) {
+            let hitEnemy = null;
+            let parent = intersects[0].object;
+            while (parent) {
+                if (parent.userData && parent.userData.enemy) {
+                    hitEnemy = parent.userData.enemy;
+                    break;
+                }
+                parent = parent.parent;
+            }
+            if (hitEnemy && hitEnemy.isAlive) {
+                this.markedEnemies.add(hitEnemy);
+                hitEnemy.userData.marked = true;
+                hitEnemy.userData.markTime = performance.now();
+                const markGeom = new THREE.RingGeometry(0.8, 1.2, 32);
+                const markMat = new THREE.MeshBasicMaterial({
+                    color: 0xff0000,
+                    transparent: true,
+                    opacity: 0.7,
+                    side: THREE.DoubleSide
+                });
+                const markRing = new THREE.Mesh(markGeom, markMat);
+                markRing.rotation.x = -Math.PI / 2;
+                markRing.position.y = 0.1;
+                hitEnemy.mesh.add(markRing);
+                hitEnemy.userData.markRing = markRing;
+                this.qAbilityCooldown = weapon.qCooldown;
+                this.screenShake = 0.05;
+            }
+        }
+    }
+    deployTurret() {
+        const weapon = this.currentWeapon;
+        if (this.qAbilityCooldown > 0 || this.activeTurrets.length >= 1) return;
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(this.camera.quaternion);
+        direction.y = 0;
+        direction.normalize();
+        const spawnPos = this.player.position.clone().add(direction.multiplyScalar(3));
+        spawnPos.y = 1;
+        const turretGroup = new THREE.Group();
+        turretGroup.position.copy(spawnPos);
+        const baseGeom = new THREE.CylinderGeometry(0.6, 0.8, 0.5, 8);
+        const baseMat = new THREE.MeshBasicMaterial({ color: 0x4444aa });
+        const base = new THREE.Mesh(baseGeom, baseMat);
+        base.position.y = 0.25;
+        turretGroup.add(base);
+        const barrelGeom = new THREE.BoxGeometry(0.3, 0.3, 1.2);
+        const barrelMat = new THREE.MeshBasicMaterial({ color: 0x6666cc });
+        const barrel = new THREE.Mesh(barrelGeom, barrelMat);
+        barrel.position.set(0, 0.7, 0.3);
+        turretGroup.add(barrel);
+        turretGroup.userData.isTurret = true;
+        turretGroup.userData.fireTimer = 0;
+        turretGroup.userData.lifetime = weapon.turretDuration;
+        turretGroup.userData.barrel = barrel;
+        this.scene.add(turretGroup);
+        this.activeTurrets.push(turretGroup);
+        this.qAbilityCooldown = weapon.qCooldown;
+        this.screenShake = 0.06;
+    }
     reload() {
         const weapon = this.currentWeapon;
         if (!this.isReloading && weapon.ammo < weapon.maxAmmo && weapon.maxAmmo !== Infinity) {
@@ -356,6 +446,47 @@ class WeaponSystem {
     fixedUpdate(dt, enemies) {
         let result = { hit: false, killed: false, damage: 0, knockedBack: [], killMethod: null };
         const weapon = this.currentWeapon;
+        if (this.qAbilityCooldown > 0) {
+            this.qAbilityCooldown -= dt;
+        }
+        for (const enemy of this.markedEnemies) {
+            if (enemy.userData.marked && performance.now() - enemy.userData.markTime > weapon.markDuration * 1000) {
+                enemy.userData.marked = false;
+                if (enemy.userData.markRing) {
+                    enemy.mesh.remove(enemy.userData.markRing);
+                    enemy.userData.markRing = null;
+                }
+                this.markedEnemies.delete(enemy);
+            }
+        }
+        for (let i = this.activeTurrets.length - 1; i >= 0; i--) {
+            const turret = this.activeTurrets[i];
+            turret.userData.lifetime -= dt;
+            if (turret.userData.lifetime <= 0) {
+                this.scene.remove(turret);
+                this.activeTurrets.splice(i, 1);
+                continue;
+            }
+            turret.userData.fireTimer -= dt;
+            let nearestEnemy = null;
+            let nearestDist = 50;
+            for (const enemy of enemies) {
+                if (enemy.isAlive) {
+                    const dist = turret.position.distanceTo(enemy.position);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = enemy;
+                    }
+                }
+            }
+            if (nearestEnemy && turret.userData.fireTimer <= 0) {
+                const toEnemy = nearestEnemy.position.clone().sub(turret.position);
+                turret.userData.barrel.lookAt(nearestEnemy.position);
+                nearestEnemy.takeDamage(weapon.turretDamage);
+                this.createImpact(nearestEnemy.position.clone(), false, 0x6666cc);
+                turret.userData.fireTimer = 1 / weapon.turretFireRate;
+            }
+        }
         if (this.dashCancelBonus && this.dashCancelBonus > 1) {
             this.dashCancelBonus = Math.max(1, this.dashCancelBonus - dt * 2);
         }
@@ -470,7 +601,8 @@ class WeaponSystem {
         if (dashCancelMult > 1.0) {
             this.dashCancelBonus = 1.0; 
         }
-        const combinedDamageMult = smudgeDamageMult * dashCancelMult;
+        let markBonus = 1.0;
+        const combinedDamageMult = smudgeDamageMult * dashCancelMult * markBonus;
         if (weapon.name === 'ERASER' && this.player) {
             const yaw = this.player.rotation.y;
             const recoilX = Math.sin(yaw) * 25;  
