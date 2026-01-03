@@ -98,7 +98,7 @@ class Game {
                 if (e.code === 'Digit2') this.weaponSystem.switchWeapon(1);
                 if (e.code === 'Digit3') this.weaponSystem.switchWeapon(2);
                 if (e.code === 'KeyR') this.weaponSystem.reload();
-                if (e.code === 'KeyQ') this.weaponSystem.deployStickyExplosive();
+                if (e.code === 'KeyQ') this.weaponSystem.useQAbility();
             }
         });
         document.addEventListener('keyup', (e) => {
