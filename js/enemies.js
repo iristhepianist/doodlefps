@@ -151,12 +151,16 @@ class EnemyManager {
     checkPlayerDamage(playerPos, playerRadius) {
         let totalDamage = 0;
         let shockwaveHit = false;
+        let damageSource = null;
         for (const enemy of this.enemies) {
             if (enemy.isAlive && enemy.canAttack) {
                 const dist = enemy.position.distanceTo(playerPos);
                 if (dist < enemy.attackRange + playerRadius) {
                     const dmg = enemy.attack();
                     totalDamage += dmg;
+                    if (!damageSource) {
+                        damageSource = enemy.type;
+                    }
                     if (enemy.type === 'bruiser' && !shockwaveHit) {
                         shockwaveHit = true;
                         enemy.triggerShockwave();
@@ -164,7 +168,7 @@ class EnemyManager {
                 }
             }
         }
-        return totalDamage;
+        return { damage: totalDamage, source: damageSource };
     }
     getEnemiesForMinimap() {
         return this.enemies.filter(e => e.isAlive).map(e => ({
@@ -262,11 +266,6 @@ class Enemy {
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
-        const outlineGeom = new THREE.BoxGeometry(width * 1.08, height * 1.08, depth * 1.08);
-        const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
-        const outline = new THREE.Mesh(outlineGeom, outlineMat);
-        outline.position.copy(body.position);
-        this.mesh.add(outline);
         const eyeWidth = 0.15;
         const eyeHeight = 0.25;
         const eyeDepth = 0.05;
@@ -317,16 +316,11 @@ class Enemy {
     createSwarmerMesh(def) {
         const bodyColor = 0x9966ff; 
         const radius = def.size.x * 0.5;
-        const bodyGeom = new THREE.SphereGeometry(radius, 16, 12);
+        const bodyGeom = new THREE.SphereGeometry(radius, 10, 8);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
-        const outlineGeom = new THREE.SphereGeometry(radius * 1.06, 16, 12);
-        const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
-        const outline = new THREE.Mesh(outlineGeom, outlineMat);
-        outline.position.copy(body.position);
-        this.mesh.add(outline);
         this.leftEye = this.createEyeball(-radius * 0.4, def.size.y * 0.65, radius * 0.8, 0.15, 0.08, 0xffffff);
         this.rightEye = this.createEyeball(radius * 0.4, def.size.y * 0.65, radius * 0.8, 0.15, 0.08, 0xffffff);
         this.mesh.add(this.leftEye);
@@ -349,7 +343,7 @@ class Enemy {
     createRangedMesh(def) {
         const bodyColor = 0x00ccff; 
         const radius = def.size.x * 0.6;
-        const bodyGeom = new THREE.SphereGeometry(radius, 20, 16);
+        const bodyGeom = new THREE.SphereGeometry(radius, 12, 10);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;

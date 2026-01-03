@@ -291,7 +291,7 @@ class WeaponSystem {
         const throwSpeed = 25;
         const velocity = direction.clone().multiplyScalar(throwSpeed);
         velocity.y += 5;
-        const stickyGeom = new THREE.SphereGeometry(0.5, 16, 12);
+        const stickyGeom = new THREE.SphereGeometry(0.5, 10, 8);
         const stickyMat = new THREE.MeshBasicMaterial({ 
             color: 0xcc3300,
             transparent: true,
@@ -368,7 +368,7 @@ class WeaponSystem {
             if (this.specialChargeTimer < weapon.specialChargeTime) {
                 this.specialChargeTimer += dt;
             }
-        } else if (!this.isSpecialFiring && weapon.specialAbility === 'beam') {
+        } else if (!this.isSpecialFiring) {
             this.specialChargeTimer = 0;
         }
         if (this.isSpecialFiring && !this.isReloading) {
@@ -664,8 +664,9 @@ class WeaponSystem {
         this.scene.add(wave);
     }
     createImpact(position, isEnemy, color = 0x1a1a1a) {
+        if (Math.random() > 0.5) return;
         const size = isEnemy ? 0.2 : 0.12;
-        const splatCount = isEnemy ? 3 : 2;
+        const splatCount = isEnemy ? 2 : 1;
         for (let i = 0; i < splatCount; i++) {
             const geometry = new THREE.CircleGeometry(size * (0.7 + Math.random() * 0.6), 8);
             const material = new THREE.MeshBasicMaterial({ 
@@ -686,11 +687,15 @@ class WeaponSystem {
             this.impactMarkers.push(impact);
             this.scene.add(impact);
         }
-        while (this.impactMarkers.length > 60) {
+        while (this.impactMarkers.length > 30) {
             const old = this.impactMarkers.shift();
-            this.scene.remove(old);
-            old.geometry.dispose();
-            old.material.dispose();
+            if (old.tagName === 'DIV') {
+                old.remove();
+            } else {
+                this.scene.remove(old);
+                if (old.geometry) old.geometry.dispose();
+                if (old.material) old.material.dispose();
+            }
         }
     }
     triggerMuzzleFlash() {
@@ -749,6 +754,9 @@ class WeaponSystem {
         if (!enemy || !enemy.mesh) return;
         const container = document.getElementById('impact-marks');
         if (!container) return;
+        if (this.impactMarkers.filter(m => m.tagName === 'DIV').length > 15) {
+            return;
+        }
         const mark = document.createElement('div');
         mark.className = 'impact-mark-3d';
         const words = ['POW!', 'BAM!', 'WHAM!', 'ZAP!'];
@@ -976,7 +984,7 @@ class WeaponSystem {
                 direction.multiplyScalar(weapon.specialRange)
             );
         }
-        const explosionGeom = new THREE.SphereGeometry(weapon.specialExplosionRadius, 16, 12);
+        const explosionGeom = new THREE.SphereGeometry(weapon.specialExplosionRadius, 10, 8);
         const explosionMat = new THREE.MeshBasicMaterial({ 
             color: 0xff6600, 
             transparent: true, 
@@ -1220,7 +1228,7 @@ class WeaponSystem {
             finalDamage *= 2.0;
             finalRadius *= 2.5;
         }
-        const explosionGeom = new THREE.SphereGeometry(0.1, 16, 12);
+        const explosionGeom = new THREE.SphereGeometry(0.1, 10, 8);
         const explosionMat = new THREE.MeshBasicMaterial({ 
             color: beamTriggered ? 0xffaa00 : 0xff4400, 
             transparent: true, 
