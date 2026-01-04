@@ -15,8 +15,8 @@ class Arena {
             color: 0xe8e3d9 
         });
         const lineMaterial = new THREE.LineBasicMaterial({ 
-            color: 0x1a1a1a,
-            linewidth: 2
+            color: 0x000000,
+            linewidth: 4
         });
         const floorGeom = new THREE.PlaneGeometry(this.size, this.size);
         const floor = new THREE.Mesh(floorGeom, floorMaterial);
@@ -30,12 +30,13 @@ class Arena {
     }
     addNotebookLines() {
         const lineMaterial = new THREE.LineBasicMaterial({ 
-            color: 0xaaccff,
-            opacity: 0.3,
+            color: 0xbbd0ee,
+            opacity: 0.25,
             transparent: true
         });
         const lineSpacing = 2;
         const halfSize = this.size / 2;
+        // Simplified - only draw single lines for better performance
         for (let z = -halfSize; z <= halfSize; z += lineSpacing) {
             const points = [
                 new THREE.Vector3(-halfSize, 0.01, z),
@@ -46,10 +47,11 @@ class Arena {
             this.scene.add(line);
         }
         const marginMaterial = new THREE.LineBasicMaterial({ 
-            color: 0xffaaaa,
-            opacity: 0.4,
+            color: 0xeecccc,
+            opacity: 0.3,
             transparent: true
         });
+        // Single margin line
         const marginPoints = [
             new THREE.Vector3(-halfSize + 5, 0.02, -halfSize),
             new THREE.Vector3(-halfSize + 5, 0.02, halfSize)
@@ -114,9 +116,13 @@ class Arena {
         fill.userData.isObstacle = true;
         this.scene.add(fill);
         const edges = new THREE.EdgesGeometry(geometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x1a1a1a });
+        const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x000000,
+            linewidth: 3
+        });
         const edgeMesh = new THREE.LineSegments(edges, lineMaterial);
         edgeMesh.position.set(x, y, z);
+        edgeMesh.scale.setScalar(1.002); // Slightly larger to make edges more visible
         this.scene.add(edgeMesh);
         this.obstacles.push({
             position: new THREE.Vector3(x, y, z),
@@ -134,10 +140,14 @@ class Arena {
         ramp.userData.isObstacle = true;
         this.scene.add(ramp);
         const edges = new THREE.EdgesGeometry(geometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x1a1a1a });
+        const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x000000,
+            linewidth: 3
+        });
         const edgeMesh = new THREE.LineSegments(edges, lineMaterial);
         edgeMesh.position.copy(ramp.position);
         edgeMesh.rotation.copy(ramp.rotation);
+        edgeMesh.scale.setScalar(1.002); // Slightly larger to make edges more visible
         this.scene.add(edgeMesh);
         this.obstacles.push({
             position: new THREE.Vector3(x, y + height / 2, z),

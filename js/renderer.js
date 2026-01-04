@@ -17,7 +17,7 @@ class Renderer {
             powerPreference: 'high-performance'
         });
         this.webglRenderer.setSize(window.innerWidth, window.innerHeight);
-        this.webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        this.webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
         this.webglRenderer.shadowMap.enabled = false;
         this.jitterAmount = 0;
         this.basePosition = new THREE.Vector3();

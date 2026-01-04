@@ -3,7 +3,7 @@
 ## Steps to export in Blender:
 
 1. Open `models/model.blend` in Blender
-2. Go to **File → Export → glTF 2.0 (.glb/.gltf)**
+2. Go to **File -> Export -> glTF 2.0 (.glb/.gltf)**
 3. In the export settings:
    - Format: **glTF Binary (.glb)**
    - Include: Check **Selected Objects** (or export all if needed)

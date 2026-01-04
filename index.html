@@ -19,7 +19,7 @@
             </div>
             <div id="weapon-container">
                 <span id="weapon-name">SKETCHER</span>
-                <span id="ammo-value">∞</span>
+                <span id="ammo-value">INF</span>
                 <svg id="special-squiggle" width="80" height="12" viewBox="0 0 80 12">
                     <path id="special-path" d="" stroke="#ff6600" stroke-width="2" fill="none" stroke-linecap="round"/>
                 </svg>
@@ -42,6 +42,7 @@
                 <span id="enemies-label">ENEMIES</span>
                 <span id="enemies-value">8</span>
             </div>
+            <div id="crush-popup" class="style-popup hidden"></div>
             <div id="flavor-text"></div>
             <!-- Momentum and Smudge indicators -->
             <div id="momentum-container">
@@ -56,10 +57,16 @@
                     <path id="smudge-path" d="" stroke="#884422" stroke-width="3" fill="none" stroke-linecap="round"/>
                 </svg>
             </div>
+            <div id="slow-indicator" class="status-indicator hidden">
+                <span id="slow-label">SLOWED</span>
+                <svg id="slow-timer" width="80" height="20" viewBox="0 0 80 20">
+                    <rect id="slow-bar" x="0" y="7" width="80" height="6" fill="#ff0000" opacity="0.8"/>
+                </svg>
+            </div>
             <canvas id="minimap"></canvas>
         </div>
         <div id="crosshair">+</div>
-        <div id="hit-marker">✕</div>
+        <div id="hit-marker">X</div>
         <div id="impact-marks"></div>
         <div id="weapon-debris"></div>
         <div id="damage-overlay"></div>
@@ -69,18 +76,104 @@
                 <path id="dash-path" d="" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
             </svg>
         </div>
+        <div id="sandbox-cheat-menu" class="hidden">
+            <div class="cheat-menu-content">
+                <h2>CHEAT MENU</h2>
+                <p class="cheat-hint">Press ` to close | TAB to navigate | ENTER to activate</p>
+                
+                <div class="cheat-section">
+                    <h3>PLAYER CHEATS</h3>
+                    <div class="cheat-grid">
+                        <button id="toggle-godmode" class="cheat-toggle">GOD MODE: OFF</button>
+                        <button id="toggle-infinite-ammo" class="cheat-toggle">INFINITE AMMO: OFF</button>
+                        <button id="heal-full" class="cheat-action">FULL HEAL</button>
+                        <button id="refill-ammo" class="cheat-action">REFILL AMMO</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>ENEMY AI TOGGLES</h3>
+                    <div class="cheat-grid">
+                        <button id="toggle-freeze-enemies" class="cheat-toggle">FREEZE ENEMIES: OFF</button>
+                        <button id="toggle-disable-attacks" class="cheat-toggle">DISABLE ATTACKS: OFF</button>
+                        <button id="toggle-disable-homing" class="cheat-toggle">DISABLE HOMING: OFF</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>SPAWN CONTROLS</h3>
+                    <label for="sandbox-count">Spawn Count (1-50)</label>
+                    <input id="sandbox-count" type="number" min="1" max="50" value="1" />
+                    
+                    <label for="spawn-location">Spawn Location</label>
+                    <select id="spawn-location">
+                        <option value="around-player">Around Player</option>
+                        <option value="random">Random Arena</option>
+                        <option value="at-player">At Player (Danger!)</option>
+                    </select>
+                    
+                    <label for="fake-wave">Fake Wave (affects type selection)</label>
+                    <input id="fake-wave" type="number" min="1" max="20" value="1" />
+                    
+                    <div class="cheat-grid" style="margin-top: 10px;">
+                        <button id="toggle-ignore-max" class="cheat-toggle">IGNORE MAX: OFF</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>SPAWN ENEMIES</h3>
+                    <div class="cheat-grid">
+                        <button data-spawn-type="chaser">SCRIBBLE</button>
+                        <button data-spawn-type="swarmer">SCRATCH</button>
+                        <button data-spawn-type="ranged">BLOT</button>
+                        <button data-spawn-type="tank">INKBLOB</button>
+                        <button data-spawn-type="bruiser">SMUDGE</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>SPAWN PRESETS</h3>
+                    <div class="cheat-grid">
+                        <button id="preset-swarm">SWARM TEST (15)</button>
+                        <button id="preset-ranged">RANGED HELL (6)</button>
+                        <button id="preset-boss">BOSS LITE</button>
+                        <button id="preset-chaos">TOTAL CHAOS</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>CLEANUP</h3>
+                    <div class="cheat-grid">
+                        <button id="sandbox-clear" class="clear-button">CLEAR ALL</button>
+                        <button id="kill-all" class="clear-button">KILL ALL</button>
+                        <button id="clear-projectiles" class="clear-button">CLEAR PROJECTILES</button>
+                    </div>
+                </div>
+                
+                <div class="cheat-section">
+                    <h3>DEBUG INFO</h3>
+                    <div id="debug-info" class="debug-panel">
+                        <div>Alive Enemies: <span id="debug-alive">0</span></div>
+                        <div>Total Enemies: <span id="debug-total">0</span></div>
+                        <div>Active Projectiles: <span id="debug-projectiles">0</span></div>
+                        <div>Damage Buffer: <span id="debug-damage">0</span></div>
+                        <div>Fake Wave: <span id="debug-wave">1</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+    <audio id="menu-music" loop>
+        <source src="music/Who Likes to Party.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="jump-sound"><source src="music/jump.mp3" type="audio/mpeg"></audio>
+    <audio id="reload-sound"><source src="music/reload.mp3" type="audio/mpeg"></audio>
+    <audio id="healthpack-sound"><source src="music/healthpack.mp3" type="audio/mpeg"></audio>
+    <audio id="sketcher-sound"><source src="music/sketcher.mp3" type="audio/mpeg"></audio>
+    <audio id="scribbler-sound"><source src="music/scribbler2.mp3" type="audio/mpeg"></audio>
+    <audio id="shotgun-sound"><source src="music/shotgun.mp3" type="audio/mpeg"></audio>
+    <audio id="sliding-sound"><source src="music/sliding.mp3" type="audio/mpeg"></audio>
     <div id="start-screen">
-        <audio id="menu-music" loop>
-            <source src="music/Who Likes to Party.mp3" type="audio/mpeg">
-        </audio>
-        <audio id="jump-sound"><source src="music/jump.mp3" type="audio/mpeg"></audio>
-        <audio id="reload-sound"><source src="music/reload.mp3" type="audio/mpeg"></audio>
-        <audio id="healthpack-sound"><source src="music/healthpack.mp3" type="audio/mpeg"></audio>
-        <audio id="sketcher-sound"><source src="music/sketcher.mp3" type="audio/mpeg"></audio>
-        <audio id="scribbler-sound"><source src="music/scribbler.mp3" type="audio/mpeg"></audio>
-        <audio id="shotgun-sound"><source src="music/shotgun.mp3" type="audio/mpeg"></audio>
-        <audio id="sliding-sound"><source src="music/sliding.mp3" type="audio/mpeg"></audio>
         <h1>DOODLE FPS</h1>
         <p>game by iristhepianist</p>
         <div id="mode-buttons">
@@ -99,7 +192,7 @@
         <div id="info-content">
             <h2>HOW TO PLAY</h2>
             <div class="info-section">
-                <h3>⚔️ COMBAT</h3>
+                <h3>COMBAT</h3>
                 <p><strong>SKETCHER</strong> - Precise pistol. Headshots deal 2.5x damage. Infinite ammo.</p>
                 <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Charge ricochet shot (3s) - bounces between 5 enemies/walls</p>
                 <p><strong>ERASER</strong> - Shotgun. Devastating close-range. Massive recoil + force wave.</p>
@@ -109,7 +202,7 @@
                 <p style="margin-left: 20px; font-size: 12px;">RIGHT CLICK: Overcharge mode - 3x fire rate for 4s, then 6s cooldown</p>
             </div>
             <div class="info-section">
-                <h3>  MOVEMENT</h3>
+                <h3> MOVEMENT</h3>
                 <p><strong>DASH (SHIFT)</strong> - Quick burst. Banking momentum boosts power!</p>
                 <p><strong>SLIDE (C)</strong> - Fast low slide. Releases banked momentum.</p>
                 <p><strong>AIR DODGE</strong> - Double-tap jump mid-air. 2 charges.</p>
@@ -131,12 +224,12 @@
             </div>
             <div class="info-section">
                 <h3> TIPS</h3>
-                <p>• Bank momentum by moving fast, release on jumps for 40% boost!</p>
-                <p>• Sharp turns build momentum - zig-zag for power!</p>
-                <p>• Enter smudge state (70%) for damage, exit for accuracy.</p>
-                <p>• Dash cancel into shots for bonus damage.</p>
-                <p>• ERASER recoil = traversal tool. Jump-shoot to fly!</p>
-                <p>• Air dodges save you mid-air - don't waste them!</p>
+                <p>- Bank momentum by moving fast, release on jumps for 40% boost!</p>
+                <p>- Sharp turns build momentum - zig-zag for power!</p>
+                <p>- Enter smudge state (70%) for damage, exit for accuracy.</p>
+                <p>- Dash cancel into shots for bonus damage.</p>
+                <p>- ERASER recoil = traversal tool. Jump-shoot to fly!</p>
+                <p>- Air dodges save you mid-air - don't waste them!</p>
             </div>
             <button id="info-close-button">GOT IT</button>
         </div>

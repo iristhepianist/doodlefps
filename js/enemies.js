@@ -5,6 +5,17 @@ class EnemyManager {
         this.enemies = [];
         this.maxEnemies = 40;
         this.time = 0;
+        this.projectiles = [];
+        this.projectileDamageBuffer = 0;
+        this.frozen = false;
+        this.attacksDisabled = false;
+        this.homingDisabled = false;
+        this.ignoreMaxEnemies = false;
+        this.crushKillCount = 0;
+        this.crushKillTimer = 0;
+        this.screenShake = 0;
+        this.beamHazards = [];
+        this.beamWarnings = [];
         this.enemyTypes = {
             chaser: {
                 name: 'Scribble',
@@ -21,11 +32,13 @@ class EnemyManager {
             ranged: {
                 name: 'Blot',
                 health: 60,
-                damage: 20,
+                damage: 30,
                 speed: 3,
                 attackRange: 35,
                 preferredRange: 18,
-                attackCooldown: 2.0,
+                attackCooldown: 4.0,
+                beamDuration: 1.5,
+                beamRadius: 2.5,
                 size: { x: 1.2, y: 1.5, z: 1.2 },
                 color: 0x333333,
                 scoreValue: 75,
@@ -33,15 +46,16 @@ class EnemyManager {
             },
             tank: {
                 name: 'Inkblob',
-                health: 250,
+                health: 750,
                 damage: 35,
-                speed: 2,
-                attackRange: 3.5,
+                speed: 5,
+                attackRange: 4.5,
                 attackCooldown: 1.5,
-                size: { x: 2.2, y: 2.8, z: 2.2 },
+                size: { x: 4.2, y: 4.8, z: 4.2 },
                 color: 0x0a0a0a,
-                scoreValue: 150,
-                spawnWeight: 10
+                scoreValue: 400,
+                spawnWeight: 10,
+                hasShockwave: true
             },
             swarmer: {
                 name: 'Scratch',
@@ -58,14 +72,14 @@ class EnemyManager {
             },
             bruiser: {
                 name: 'Smudge',
-                health: 400,
+                health: 10000,
                 damage: 50,
-                speed: 1.5,
-                attackRange: 4,
+                speed: 3.5,
+                attackRange: 5,
                 attackCooldown: 2.5,
-                size: { x: 3, y: 3.5, z: 3 },
+                size: { x: 9, y: 9.5, z: 9 },
                 color: 0x050505,
-                scoreValue: 250,
+                scoreValue: 2000,
                 spawnWeight: 5,
                 hasShockwave: true
             }
@@ -76,34 +90,90 @@ class EnemyManager {
             this.scene.remove(enemy.mesh);
         }
         this.enemies = [];
+        for (const proj of this.projectiles) {
+            this.scene.remove(proj.mesh);
+            if (proj.glow) this.scene.remove(proj.glow);
+        }
+        this.projectiles = [];
+        this.projectileDamageBuffer = 0;
+        this.crushKillCount = 0;
+        this.crushKillTimer = 0;
+    }
+    clearAll() {
+        this.reset();
+    }
+    setFrozen(frozen) {
+        this.frozen = frozen;
+    }
+    setAttacksDisabled(disabled) {
+        this.attacksDisabled = disabled;
+    }
+    setHomingDisabled(disabled) {
+        this.homingDisabled = disabled;
+    }
+    setIgnoreMaxEnemies(ignore) {
+        this.ignoreMaxEnemies = ignore;
+    }
+    killAll() {
+        for (const enemy of this.enemies) {
+            if (enemy.isAlive) {
+                enemy.health = 0;
+                enemy.die();
+            }
+        }
+    }
+    clearProjectiles() {
+        for (const proj of this.projectiles) {
+            this.scene.remove(proj.mesh);
+            if (proj.glow) this.scene.remove(proj.glow);
+        }
+        this.projectiles = [];
+        this.projectileDamageBuffer = 0;
+    }
+    getAliveCount() {
+        return this.enemies.filter(e => e.isAlive).length;
     }
     spawnEnemy(wave, playerPos) {
-        if (this.enemies.filter(e => e.isAlive).length >= this.maxEnemies) {
+        if (!this.ignoreMaxEnemies && this.getAliveCount() >= this.maxEnemies) {
             return;
         }
         const type = this.selectEnemyType(wave);
         const enemyDef = this.enemyTypes[type];
         const spawnCount = (type === 'swarmer' && wave >= 4) ? enemyDef.packSize : 1;
-        for (let s = 0; s < spawnCount; s++) {
-            if (this.enemies.filter(e => e.isAlive).length >= this.maxEnemies) break;
-            let spawnPos;
-            const bounds = this.arena.getBounds();
-            let attempts = 0;
-            do {
-                spawnPos = new THREE.Vector3(
-                    bounds.minX + Math.random() * (bounds.maxX - bounds.minX),
-                    enemyDef.size.y / 2,
-                    bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ)
-                );
-                attempts++;
-            } while (spawnPos.distanceTo(playerPos) < 15 && attempts < 20);
-            if (s > 0) {
-                spawnPos.x += (Math.random() - 0.5) * 3;
-                spawnPos.z += (Math.random() - 0.5) * 3;
-            }
+        this.spawnEnemyOfType(type, spawnCount, playerPos);
+    }
+    spawnEnemyOfType(type, count, playerPos = null) {
+        const enemyDef = this.enemyTypes[type];
+        if (!enemyDef) return 0;
+        const allowed = this.ignoreMaxEnemies ? count : Math.max(0, this.maxEnemies - this.getAliveCount());
+        const toSpawn = Math.min(count, allowed);
+        let spawned = 0;
+        for (let s = 0; s < toSpawn; s++) {
+            const spawnPos = this.generateSpawnPosition(enemyDef, playerPos, s > 0);
             const enemy = new Enemy(this.scene, enemyDef, type, spawnPos);
+            enemy.enemyManager = this;
             this.enemies.push(enemy);
+            spawned++;
         }
+        return spawned;
+    }
+    generateSpawnPosition(enemyDef, playerPos = null, offset = false) {
+        const bounds = this.arena.getBounds();
+        let spawnPos;
+        let attempts = 0;
+        do {
+            spawnPos = new THREE.Vector3(
+                bounds.minX + Math.random() * (bounds.maxX - bounds.minX),
+                enemyDef.size.y / 2,
+                bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ)
+            );
+            attempts++;
+        } while (playerPos && spawnPos.distanceTo(playerPos) < 15 && attempts < 20);
+        if (offset) {
+            spawnPos.x += (Math.random() - 0.5) * 3;
+            spawnPos.z += (Math.random() - 0.5) * 3;
+        }
+        return spawnPos;
     }
     selectEnemyType(wave) {
         let availableTypes = [];
@@ -129,12 +199,13 @@ class EnemyManager {
         }
         return 'chaser';
     }
-    fixedUpdate(dt, playerPos) {
+    fixedUpdate(dt, playerPos, playerRadius) {
         for (const enemy of this.enemies) {
-            if (enemy.isAlive) {
+            if (enemy.isAlive && !this.frozen) {
                 enemy.update(dt, playerPos, this.arena);
             }
         }
+        this.updateProjectiles(dt, playerPos, playerRadius);
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             if (this.enemies[i].shouldRemove) {
                 this.scene.remove(this.enemies[i].mesh);
@@ -142,21 +213,252 @@ class EnemyManager {
             }
         }
     }
+    updateProjectiles(dt, playerPos, playerRadius) {
+        const bounds = this.arena.getBounds();
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const proj = this.projectiles[i];
+            proj.lifetime -= dt;
+            
+            if (proj.isHoming && !proj.parried && !this.homingDisabled) {
+                const toTarget = playerPos.clone().sub(proj.mesh.position);
+                toTarget.y = 0;
+                if (toTarget.lengthSq() > 0.001) {
+                    toTarget.normalize();
+                    const currentDir = proj.velocity.clone().normalize();
+                    const steerForce = toTarget.sub(currentDir).multiplyScalar(proj.homingStrength);
+                    proj.velocity.add(steerForce.multiplyScalar(dt));
+                    const speed = proj.velocity.length();
+                    proj.velocity.normalize().multiplyScalar(Math.min(speed, 16));
+                }
+            }
+            
+            proj.mesh.position.addScaledVector(proj.velocity, dt);
+            if (proj.glow) {
+                proj.glow.position.copy(proj.mesh.position);
+            }
+            
+            if (proj.parried && proj.owner) {
+                const distToOwner = proj.mesh.position.distanceTo(proj.owner.position);
+                if (distToOwner <= proj.owner.size.x + proj.radius) {
+                    proj.owner.health = 0;
+                    proj.owner.die();
+                    this.removeProjectile(i);
+                    continue;
+                }
+            }
+            
+            const hitPlayerRadius = playerRadius + proj.radius;
+            if (proj.mesh.position.distanceTo(playerPos) <= hitPlayerRadius) {
+                if (!proj.parried) {
+                    this.projectileDamageBuffer += proj.damage;
+                }
+                this.removeProjectile(i);
+                continue;
+            }
+            if (proj.lifetime <= 0 || !this.isInsideBounds(proj.mesh.position, bounds) || this.hitObstacle(proj.mesh.position, proj.radius)) {
+                this.removeProjectile(i);
+            }
+        }
+    }
+    checkParry(playerPos, playerRadius, parryActive, isEraserShot, shotDirection) {
+        if (!parryActive && !isEraserShot) return false;
+        
+        let parrySuccess = false;
+        for (const proj of this.projectiles) {
+            if (!proj.canBeParried || proj.parried) continue;
+            
+            const distToPlayer = proj.mesh.position.distanceTo(playerPos);
+            let parryRange = playerRadius + proj.radius + 1.2;
+            
+            if (isEraserShot && shotDirection) {
+                parryRange = playerRadius + proj.radius + 8.0;
+                const toProj = proj.mesh.position.clone().sub(playerPos).normalize();
+                const dot = shotDirection.dot(toProj);
+                if (dot < 0.7) continue;
+            }
+            
+            if (distToPlayer <= parryRange) {
+                proj.parried = true;
+                proj.velocity.negate().multiplyScalar(1.5);
+                proj.mesh.material.color.setHex(0x00ff00);
+                if (proj.glow) {
+                    proj.glow.material.color.setHex(0x00ff88);
+                }
+                parrySuccess = true;
+            }
+        }
+        return parrySuccess;
+    }
+    
+    removeProjectile(index) {
+        const proj = this.projectiles[index];
+        this.scene.remove(proj.mesh);
+        if (proj.glow) this.scene.remove(proj.glow);
+        this.projectiles.splice(index, 1);
+    }
+    isInsideBounds(pos, bounds) {
+        return pos.x > bounds.minX && pos.x < bounds.maxX && pos.z > bounds.minZ && pos.z < bounds.maxZ;
+    }
+    hitObstacle(pos, radius) {
+        for (const obstacle of this.arena.obstacles) {
+            const halfSize = obstacle.size.clone().multiplyScalar(0.5);
+            const minX = obstacle.position.x - halfSize.x - radius;
+            const maxX = obstacle.position.x + halfSize.x + radius;
+            const minY = obstacle.position.y - halfSize.y - radius;
+            const maxY = obstacle.position.y + halfSize.y + radius;
+            const minZ = obstacle.position.z - halfSize.z - radius;
+            const maxZ = obstacle.position.z + halfSize.z + radius;
+            if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY && pos.z >= minZ && pos.z <= maxZ) {
+                return true;
+            }
+        }
+        return false;
+    }
     update(dt) {
         this.time += dt;
+        
+        // Decay screen shake
+        if (this.screenShake > 0) {
+            this.screenShake = Math.max(0, this.screenShake - dt * 2);
+        }
+        
+        // Update crush kill timer for UI feedback
+        if (this.crushKillTimer > 0) {
+            this.crushKillTimer -= dt;
+        }
+        
+        // Update crush visual effects
+        const toRemove = [];
+        for (let i = this.scene.children.length - 1; i >= 0; i--) {
+            const obj = this.scene.children[i];
+            if (obj.userData.isCrushEffect) {
+                obj.userData.lifetime -= dt;
+                const progress = 1 - (obj.userData.lifetime / 0.6);
+                obj.scale.set(
+                    1 + progress * (obj.userData.maxScale - 1),
+                    1 + progress * (obj.userData.maxScale - 1),
+                    1
+                );
+                obj.material.opacity = 0.9 * (1 - progress);
+                if (obj.userData.lifetime <= 0) {
+                    toRemove.push(obj);
+                }
+            } else if (obj.userData.isDust) {
+                obj.userData.lifetime -= dt;
+                obj.position.addScaledVector(obj.userData.velocity, dt);
+                obj.userData.velocity.y -= 9.8 * dt;
+                obj.material.opacity = Math.max(0, obj.userData.lifetime / 0.8);
+                if (obj.userData.lifetime <= 0 || obj.position.y < 0) {
+                    toRemove.push(obj);
+                }
+            } else if (obj.userData.isBeam) {
+                obj.userData.lifetime -= dt;
+                obj.material.opacity = 0.8 * Math.max(0, obj.userData.lifetime / 0.4);
+                if (obj.userData.lifetime <= 0) {
+                    toRemove.push(obj);
+                }
+            }
+        }
+        for (const obj of toRemove) {
+            this.scene.remove(obj);
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) obj.material.dispose();
+        }
+        
+        // Update beam hazards
+        for (let i = this.beamHazards.length - 1; i >= 0; i--) {
+            const hazard = this.beamHazards[i];
+            hazard.lifetime -= dt;
+            
+            // Update visual opacity
+            if (hazard.mesh) {
+                hazard.mesh.material.opacity = Math.min(0.8, hazard.lifetime / hazard.maxLifetime);
+            }
+            if (hazard.ring) {
+                const pulse = 0.6 + Math.sin(hazard.lifetime * 10) * 0.2;
+                hazard.ring.material.opacity = pulse * (hazard.lifetime / hazard.maxLifetime);
+            }
+            
+            if (hazard.lifetime <= 0) {
+                // Remove visual
+                if (hazard.mesh) this.scene.remove(hazard.mesh);
+                if (hazard.ring) this.scene.remove(hazard.ring);
+                this.beamHazards.splice(i, 1);
+            }
+        }
+        
+        // Update beam warnings
+        for (let i = this.beamWarnings.length - 1; i >= 0; i--) {
+            const warning = this.beamWarnings[i];
+            warning.timer += dt;
+            
+            // Track player position until tracking duration expires
+            if (warning.timer < warning.trackDuration && warning.playerPos) {
+                // Follow player
+                if (warning.circle) {
+                    warning.circle.position.x = warning.playerPos.x;
+                    warning.circle.position.z = warning.playerPos.z;
+                }
+                if (warning.ring) {
+                    warning.ring.position.x = warning.playerPos.x;
+                    warning.ring.position.z = warning.playerPos.z;
+                }
+            } else if (!warning.lockedPosition) {
+                // Lock position when tracking expires
+                warning.lockedPosition = new THREE.Vector3(
+                    warning.circle.position.x,
+                    0,
+                    warning.circle.position.z
+                );
+            }
+            
+            // Pulse animation - gets faster and more intense as time runs out
+            const progress = warning.timer / warning.duration;
+            const pulseSpeed = 5 + progress * 15;
+            const pulse = 0.3 + Math.abs(Math.sin(this.time * pulseSpeed)) * 0.7;
+            
+            if (warning.circle) {
+                warning.circle.material.opacity = 0.2 + pulse * 0.4;
+            }
+            if (warning.ring) {
+                warning.ring.material.opacity = 0.5 + pulse * 0.5;
+                warning.ring.rotation.z += dt * (2 + progress * 3);
+            }
+            
+            if (warning.timer >= warning.duration) {
+                // Fire the actual beam at locked position
+                if (warning.enemy && warning.enemy.isAlive && warning.lockedPosition) {
+                    warning.enemy.fireVerticalBeamImmediate(warning.lockedPosition, warning.radius);
+                }
+                
+                // Remove warning visuals
+                if (warning.circle) this.scene.remove(warning.circle);
+                if (warning.ring) this.scene.remove(warning.ring);
+                this.beamWarnings.splice(i, 1);
+            }
+        }
+        
         for (const enemy of this.enemies) {
             enemy.visualUpdate(dt, this.time);
         }
     }
     checkPlayerDamage(playerPos, playerRadius) {
+        if (this.attacksDisabled) return 0;
+        
         let totalDamage = 0;
         let shockwaveHit = false;
         for (const enemy of this.enemies) {
             if (enemy.isAlive && enemy.canAttack) {
                 const dist = enemy.position.distanceTo(playerPos);
                 if (dist < enemy.attackRange + playerRadius) {
-                    const dmg = enemy.attack();
-                    totalDamage += dmg;
+                    const attackResult = enemy.attack(playerPos);
+                    if (attackResult && attackResult.projectile) {
+                        this.projectiles.push(attackResult.projectile);
+                    }
+                    const dmg = attackResult ? attackResult.damage : 0;
+                    if (enemy.type !== 'ranged') {
+                        totalDamage += dmg;
+                    }
                     if (enemy.type === 'bruiser' && !shockwaveHit) {
                         shockwaveHit = true;
                         enemy.triggerShockwave();
@@ -164,7 +466,42 @@ class EnemyManager {
                 }
             }
         }
+        if (this.projectileDamageBuffer > 0) {
+            totalDamage += this.projectileDamageBuffer;
+            this.projectileDamageBuffer = 0;
+        }
+        
+        // Check beam hazard damage
+        for (const hazard of this.beamHazards) {
+            const dx = hazard.position.x - playerPos.x;
+            const dz = hazard.position.z - playerPos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist <= hazard.radius) {
+                totalDamage += hazard.damage;
+            }
+        }
+        
         return totalDamage;
+    }
+    checkTurretDamage(turrets) {
+        if (!turrets || turrets.length === 0) return;
+        
+        for (const enemy of this.enemies) {
+            if (!enemy.isAlive || !enemy.canAttack) continue;
+            
+            for (const turret of turrets) {
+                if (!turret.userData.health || turret.userData.health <= 0) continue;
+                
+                const dist = enemy.position.distanceTo(turret.position);
+                if (dist < enemy.attackRange + 2) {
+                    const attackResult = enemy.attack(turret.position);
+                    const dmg = attackResult ? attackResult.damage : 0;
+                    if (dmg > 0 && enemy.type !== 'ranged') {
+                        turret.userData.health = Math.max(0, turret.userData.health - dmg);
+                    }
+                }
+            }
+        }
     }
     getEnemiesForMinimap() {
         return this.enemies.filter(e => e.isAlive).map(e => ({
@@ -176,6 +513,17 @@ class EnemyManager {
     }
     getAliveCount() {
         return this.enemies.filter(e => e.isAlive).length;
+    }
+    
+    getCrushKillInfo() {
+        return {
+            count: this.crushKillCount,
+            active: this.crushKillTimer > 0
+        };
+    }
+    
+    getScreenShake() {
+        return this.screenShake;
     }
 }
 class Enemy {
@@ -190,6 +538,8 @@ class Enemy {
         this.attackRange = definition.attackRange;
         this.attackCooldown = definition.attackCooldown;
         this.preferredRange = definition.preferredRange || definition.attackRange;
+        this.beamDuration = definition.beamDuration || 1.5;
+        this.beamRadius = definition.beamRadius || 2.5;
         this.scoreValue = definition.scoreValue;
         this.isAlive = true;
         this.shouldRemove = false;
@@ -235,7 +585,7 @@ class Enemy {
     }
     createEyeball(x, y, z, eyeRadius, pupilRadius, color = 0xf5f0e6) {
         const eyeGroup = new THREE.Group();
-        const eyeGeom = new THREE.SphereGeometry(eyeRadius, 12, 8);
+        const eyeGeom = new THREE.SphereGeometry(eyeRadius, 10, 6);
         const eyeMat = new THREE.MeshBasicMaterial({ color: color });
         const eye = new THREE.Mesh(eyeGeom, eyeMat);
         eyeGroup.add(eye);
@@ -243,7 +593,7 @@ class Enemy {
         const outline = new THREE.Mesh(eyeGeom.clone(), outlineMat);
         outline.scale.multiplyScalar(1.08);
         eyeGroup.add(outline);
-        const pupilGeom = new THREE.SphereGeometry(pupilRadius, 8, 6);
+        const pupilGeom = new THREE.SphereGeometry(pupilRadius, 6, 5);
         const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
         const pupil = new THREE.Mesh(pupilGeom, pupilMat);
         pupil.position.z = eyeRadius * 0.8;
@@ -317,12 +667,12 @@ class Enemy {
     createSwarmerMesh(def) {
         const bodyColor = 0x9966ff; 
         const radius = def.size.x * 0.5;
-        const bodyGeom = new THREE.SphereGeometry(radius, 16, 12);
+        const bodyGeom = new THREE.SphereGeometry(radius, 12, 10);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
-        const outlineGeom = new THREE.SphereGeometry(radius * 1.06, 16, 12);
+        const outlineGeom = new THREE.SphereGeometry(radius * 1.06, 12, 10);
         const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
         const outline = new THREE.Mesh(outlineGeom, outlineMat);
         outline.position.copy(body.position);
@@ -349,12 +699,12 @@ class Enemy {
     createRangedMesh(def) {
         const bodyColor = 0x00ccff; 
         const radius = def.size.x * 0.6;
-        const bodyGeom = new THREE.SphereGeometry(radius, 20, 16);
+        const bodyGeom = new THREE.SphereGeometry(radius, 14, 12);
         const bodyMat = new THREE.MeshBasicMaterial({ color: bodyColor });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.position.y = def.size.y * 0.5;
         this.mesh.add(body);
-        const outlineGeom = new THREE.SphereGeometry(radius * 1.05, 20, 16);
+        const outlineGeom = new THREE.SphereGeometry(radius * 1.05, 14, 12);
         const outlineMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide });
         const outline = new THREE.Mesh(outlineGeom, outlineMat);
         outline.position.copy(body.position);
@@ -378,7 +728,7 @@ class Enemy {
         this.orbitDots = [];
         for (let i = 0; i < 4; i++) {
             const dot = new THREE.Mesh(
-                new THREE.SphereGeometry(0.1, 8, 6),
+                new THREE.SphereGeometry(0.1, 6, 5),
                 new THREE.MeshBasicMaterial({ color: 0x006699 })
             );
             dot.userData.angle = (i / 4) * Math.PI * 2;
@@ -677,38 +1027,189 @@ class Enemy {
             this.die();
         }
     }
-    attack() {
-        if (!this.canAttack || !this.isAlive) return 0;
+    attack(targetPos) {
+        if (!this.canAttack || !this.isAlive) return null;
         this.canAttack = false;
         this.attackTimer = this.attackCooldown;
         if (this.type === 'ranged') {
-            const projGeom = new THREE.SphereGeometry(0.3, 8, 8);
-            const projMat = new THREE.MeshBasicMaterial({ 
-                color: 0xff0000,
-                transparent: true,
-                opacity: 0.9
-            });
-            const proj = new THREE.Mesh(projGeom, projMat);
-            proj.position.copy(this.position);
-            proj.position.y += this.size.y / 2;
-            this.scene.add(proj);
-            const glowGeom = new THREE.SphereGeometry(0.5, 8, 8);
-            const glowMat = new THREE.MeshBasicMaterial({
-                color: 0xff4444,
-                transparent: true,
-                opacity: 0.3
-            });
-            const glow = new THREE.Mesh(glowGeom, glowMat);
-            glow.position.copy(proj.position);
-            this.scene.add(glow);
-            setTimeout(() => {
-                this.scene.remove(proj);
-                this.scene.remove(glow);
-            }, 500);
+            // Fire beam that tracks player
+            this.createBeamWarning(targetPos);
+            return { damage: 0 };
         }
-        return this.damage;
+        return { damage: this.damage };
     }
+
+    createBeamWarning(playerPos) {
+        const warningDuration = 0.8;
+        const trackDuration = 0.5; // Track player for 0.5s, then lock for 0.3s
+        const radius = this.beamRadius || 2.5;
+        
+        // Create warning circle on ground
+        const warningGeom = new THREE.CircleGeometry(radius, 32);
+        const warningMat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const warningCircle = new THREE.Mesh(warningGeom, warningMat);
+        warningCircle.position.set(playerPos.x, 0.05, playerPos.z);
+        warningCircle.rotation.x = -Math.PI / 2;
+        this.scene.add(warningCircle);
+        
+        // Create warning ring
+        const ringGeom = new THREE.RingGeometry(radius * 0.9, radius * 1.1, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide
+        });
+        const warningRing = new THREE.Mesh(ringGeom, ringMat);
+        warningRing.position.set(playerPos.x, 0.1, playerPos.z);
+        warningRing.rotation.x = -Math.PI / 2;
+        this.scene.add(warningRing);
+        
+        // Add to warning tracking
+        if (this.enemyManager) {
+            this.enemyManager.beamWarnings.push({
+                playerPos: playerPos, // Reference to track player
+                lockedPosition: null, // Will be set when tracking stops
+                radius: radius,
+                timer: 0,
+                duration: warningDuration,
+                trackDuration: trackDuration,
+                circle: warningCircle,
+                ring: warningRing,
+                enemy: this
+            });
+        }
+    }
+    
+    fireVerticalBeamImmediate(targetPos, beamRadius) {
+        if (!this.isAlive) return;
+        
+        const groundPos = targetPos.clone();
+        groundPos.y = 0.1;
+        const beamHeight = 15; // Fixed height for visual consistency
+        const radius = beamRadius || this.beamRadius || 2.5;
+        const beamDuration = this.beamDuration || 1.5;
+        
+        // Create vertical beam visual
+        const beamGeom = new THREE.CylinderGeometry(radius, radius, beamHeight, 12);
+        const beamMat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.7
+        });
+        const beam = new THREE.Mesh(beamGeom, beamMat);
+        beam.position.copy(groundPos);
+        beam.position.y = beamHeight / 2;
+        this.scene.add(beam);
+        
+        // Create ground danger zone ring
+        const ringGeom = new THREE.RingGeometry(radius * 0.8, radius * 1.1, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.position.copy(groundPos);
+        ring.rotation.x = -Math.PI / 2;
+        this.scene.add(ring);
+        
+        // Add to hazard tracking
+        if (this.enemyManager) {
+            this.enemyManager.beamHazards.push({
+                position: groundPos.clone(),
+                radius: radius,
+                damage: this.damage,
+                lifetime: beamDuration,
+                maxLifetime: beamDuration,
+                mesh: beam,
+                ring: ring
+            });
+        }
+    }
+    
     die() {
         this.isAlive = false;
+        
+        // Tank/Bruiser crush mechanic
+        if ((this.type === 'tank' || this.type === 'bruiser') && this.enemyManager) {
+            const crushRadius = this.type === 'tank' ? 4.5 : 6.0;
+            const crushedEnemies = [];
+            
+            // Find all enemies in crush radius
+            for (const enemy of this.enemyManager.enemies) {
+                if (enemy === this || !enemy.isAlive) continue;
+                
+                const dist = this.position.distanceTo(enemy.position);
+                if (dist <= crushRadius) {
+                    crushedEnemies.push(enemy);
+                }
+            }
+            
+            // Crush all nearby enemies
+            if (crushedEnemies.length > 0) {
+                for (const enemy of crushedEnemies) {
+                    enemy.health = 0;
+                    enemy.isAlive = false;
+                    enemy.wasCrushed = true;
+                }
+                
+                // Track for score/feedback
+                this.enemyManager.crushKillCount = crushedEnemies.length;
+                this.enemyManager.crushKillTimer = 2.0;
+                this.enemyManager.screenShake = this.type === 'tank' ? 0.4 : 0.6;
+                
+                // Create impact shockwave
+                this.createCrushImpact(crushRadius);
+            }
+        }
+    }
+    
+    createCrushImpact(radius) {
+        // Main impact ring
+        const ringGeom = new THREE.RingGeometry(0.5, radius * 1.2, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ 
+            color: this.type === 'tank' ? 0x1a1a1a : 0x0a0a0a,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.9
+        });
+        const impactRing = new THREE.Mesh(ringGeom, ringMat);
+        impactRing.position.copy(this.position);
+        impactRing.position.y = 0.15;
+        impactRing.rotation.x = -Math.PI / 2;
+        impactRing.userData.lifetime = 0.6;
+        impactRing.userData.maxScale = 1.5;
+        impactRing.userData.isCrushEffect = true;
+        this.scene.add(impactRing);
+        
+        // Dust burst particles
+        for (let i = 0; i < 20; i++) {
+            const dustGeom = new THREE.SphereGeometry(0.15 + Math.random() * 0.15, 6, 6);
+            const dustMat = new THREE.MeshBasicMaterial({ 
+                color: 0x8B7355,
+                transparent: true,
+                opacity: 0.7
+            });
+            const dust = new THREE.Mesh(dustGeom, dustMat);
+            dust.position.copy(this.position);
+            dust.position.y += 0.2;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 3;
+            dust.userData.velocity = new THREE.Vector3(
+                Math.cos(angle) * speed,
+                2 + Math.random() * 3,
+                Math.sin(angle) * speed
+            );
+            dust.userData.lifetime = 0.5 + Math.random() * 0.3;
+            dust.userData.isDust = true;
+            this.scene.add(dust);
+        }
     }
 }

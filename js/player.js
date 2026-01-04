@@ -32,14 +32,20 @@ class Player {
         this.airDodgeCooldown = 0;
         this.airDodgeCharges = 2;
         this.maxAirDodgeCharges = 2;
+        this.lastJumpTapTime = 0;
+        this.jumpTapWindow = 0.25;
         this.dashSpeed = 65;
-        this.dashDuration = 0.18;
-        this.dashCooldown = 0.4;
+        this.dashDuration = 0.25;
+        this.dashCooldown = 0.6;
         this.dashTimer = 0;
         this.dashCooldownTimer = 0;
         this.isDashing = false;
         this.dashDirection = new THREE.Vector3();
         this.dashCancelWindow = true;
+        this.isInvincible = false;
+        this.parryWindow = 0;
+        this.parryWindowDuration = 0.2;
+        this.parryHitSuccess = false;
         this.slideSpeed = 42;
         this.slideDuration = 0.7;
         this.slideMinSpeed = 14;
@@ -58,6 +64,7 @@ class Player {
         this.trailPoints = [];
         this.maxTrailPoints = 30;
         this.trailTimer = 0;
+        this.dashCancelFlashTimer = 0;
         this.isGrounded = false;
         this.isMoving = false;
         this.wasGrounded = false;
@@ -76,7 +83,8 @@ class Player {
             right: false,
             jump: false,
             dash: false,
-            slide: false
+            slide: false,
+            parry: false
         };
         this.mouseSensitivity = 0.002;
         this.bobTime = 0;
@@ -97,6 +105,7 @@ class Player {
         this.isGrounded = false;
         this.isDashing = false;
         this.isSliding = false;
+        this.isInvincible = false;
         this.dashCooldownTimer = 0;
         this.coyoteTimer = 0;
         this.jumpBufferTimer = 0;
@@ -108,12 +117,16 @@ class Player {
         this.wallRunTimer = 0;
         this.snapBackForce = 0;
         this.airDodgeCharges = this.maxAirDodgeCharges;
+        this.lastJumpTapTime = 0;
+        this.parryWindow = 0;
+        this.parryHitSuccess = false;
         this.smudgeLevel = 0;
         this.isSmudged = false;
         this.smudgeDuration = 0;
         this.trailPoints = [];
         this.cameraTilt = 0;
         this.targetCameraTilt = 0;
+        this.dashCancelFlashTimer = 0;
         this.updateCamera();
     }
     handleKeyDown(code) {
@@ -122,10 +135,21 @@ class Player {
             case 'KeyS': this.input.backward = true; break;
             case 'KeyA': this.input.left = true; break;
             case 'KeyD': this.input.right = true; break;
-            case 'Space': this.input.jump = true; break;
+            case 'Space':
+                if (!this.input.jump) {
+                    this.handleJumpTap();
+                }
+                this.input.jump = true;
+                break;
             case 'ShiftLeft':
             case 'ShiftRight': this.input.dash = true; break;
             case 'KeyC': this.input.slide = true; break;
+            case 'KeyF':
+                if (!this.input.parry && this.parryWindow <= 0) {
+                    this.input.parry = true;
+                    this.parryWindow = this.parryWindowDuration;
+                }
+                break;
         }
     }
     handleKeyUp(code) {
@@ -138,6 +162,7 @@ class Player {
             case 'ShiftLeft':
             case 'ShiftRight': this.input.dash = false; break;
             case 'KeyC': this.input.slide = false; break;
+            case 'KeyF': this.input.parry = false; break;
         }
     }
     handleMouseMove(dx, dy) {
@@ -154,6 +179,19 @@ class Player {
         }
         this.targetCameraTilt += dx * 0.0003;
         this.targetCameraTilt = Math.max(-0.08, Math.min(0.08, this.targetCameraTilt));
+    }
+    handleJumpTap() {
+        if (this.isGrounded) {
+            this.lastJumpTapTime = 0;
+            return;
+        }
+        const now = performance.now() * 0.001;
+        if (now - this.lastJumpTapTime <= this.jumpTapWindow && this.airDodgeCharges > 0 && !this.isDashing) {
+            this.performAirDodge();
+            this.lastJumpTapTime = 0;
+        } else {
+            this.lastJumpTapTime = now;
+        }
     }
     fixedUpdate(dt) {
         this.updateMomentumBank(dt);
@@ -182,6 +220,12 @@ class Player {
                 this.airDodgeCharges = this.maxAirDodgeCharges;
             }
         }
+        if (this.isGrounded) {
+            this.lastJumpTapTime = 0;
+        }
+        if (this.dashCancelFlashTimer > 0) {
+            this.dashCancelFlashTimer = Math.max(0, this.dashCancelFlashTimer - dt);
+        }
         if (this.wasGrounded && !this.isGrounded) {
             this.coyoteTimer = this.coyoteTime;
         }
@@ -195,6 +239,7 @@ class Player {
             this.dashTimer -= dt;
             if (this.dashTimer <= 0) {
                 this.isDashing = false;
+                this.isInvincible = false;
                 this.dashCancelWindow = false;
                 this.isDashing = false;
                 if (this.speedLinesElement) {
@@ -418,10 +463,6 @@ class Player {
                 this.velocity.z *= boostMult;
             }
         }
-        if (wantsJump && !this.isGrounded && this.airDodgeCharges > 0 && !this.isDashing) {
-            this.performAirDodge();
-            this.jumpBufferTimer = 0;
-        }
         if (this.input.dash && this.dashCooldownTimer <= 0 && !this.isDashing && !this.isSliding) {
             this.startDash();
             this.input.dash = false;
@@ -435,6 +476,7 @@ class Player {
     }
     startDash() {
         this.isDashing = true;
+        this.isInvincible = true;
         this.dashTimer = this.dashDuration;
         this.dashCooldownTimer = this.dashCooldown;
         this.dashCancelWindow = true;
@@ -744,6 +786,14 @@ class Player {
             }
             return;
         }
+        const hasInput = this.input.forward || this.input.backward || this.input.left || this.input.right;
+        if (!hasInput) {
+            this.isWallRunning = false;
+            if (this.speedLinesElement) {
+                this.speedLinesElement.classList.remove('active');
+            }
+            return;
+        }
         this.velocity.y = Math.max(this.velocity.y, -2);
         const wallDir = new THREE.Vector3(-this.wallNormal.z, 0, this.wallNormal.x);
         const currentDir = new THREE.Vector3(this.velocity.x, 0, this.velocity.z).normalize();
@@ -787,6 +837,8 @@ class Player {
         }
     }
     takeDamage(amount) {
+        if (this.isInvincible) return;
+        if (window.game && window.game.godMode) return;
         this.health -= amount;
         this.health = Math.max(0, this.health);
         this.smudgeLevel = Math.min(this.maxSmudgeLevel, this.smudgeLevel + amount * 0.5);
@@ -861,6 +913,7 @@ class Player {
         this.velocity.x *= 0.7;
         this.velocity.z *= 0.7;
         this.momentumBank = Math.min(this.maxMomentumBank, this.momentumBank + 20);
+        this.dashCancelFlashTimer = 0.25;
         return true;
     }
     applyRecoilTraversal(recoilX, recoilZ, recoilY = 0) {
